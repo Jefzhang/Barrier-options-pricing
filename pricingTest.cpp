@@ -4,13 +4,20 @@
 
 using namespace std;
 
+// template <typename TPath>
+// void plot_paths(TPath & X, string filename) {
+//     ofstream of(filename.c_str());
+//     of << X << endl;
+//     of.close();
+// };
+
 int main(int argc, char const *argv[])
 {
     /* code */
     random_device rd;
     mt19937_64 gen(rd());
 
-    double delta = 1;
+//    double delta = 1;
     double h = 0.02;
     vector<double> startTime(1, 9);
     vector<double> endTime(1, 10);
@@ -33,7 +40,8 @@ int main(int argc, char const *argv[])
     auto correlation = vector<vector<double> >(1, vector<double>(1, 1.0));
     
 
-    auto liborRates = LiborRates(1, h, startTime, endTime);
+    LiborRates liborRates(1, h, startTime, endTime);
+    // auto liborRates = LiborRates(1, h, startTime, endTime);
     // liborRates.setDynamics(sigma, correlation, initValue, 0);
     // liborRates.setRandomSeeds(gen);
     // liborRates.setBounds(bounds, knock_stop, upbound);

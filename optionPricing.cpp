@@ -1,4 +1,4 @@
-#include "process.hpp"
+//#include "process.hpp"
 #include "optionPricing.hpp"
 #include<functional>
 
@@ -110,21 +110,86 @@ void LiborRates::resetAllPath(){
     }
 }
 
-Dstate const & LiborRates::getExitState(usigned i){ 
-    return this->logLibors[i]->realization.getExitState();
+Dstate LiborRates::getExitState(usigned i)const{ 
+    auto exitState = this->logLibors[i]->realization.getExitState();
+    exitState.value = exp(exitState.value);
+    return exitState;
 }
 
-Dstate const & LiborRates::getLastState(usigned i){
-    return this->logLibors[i]->realization.back();
+usigned LiborRates::getExitIndex(usigned i)const{
+    return this->logLibors[i]->realization.getExitIndex();
+}
+
+bool LiborRates::ifKnockedBound(usigned i)const{
+    return this->logLibors[i]->realization.ifKnocked();
+}
+
+Dstate LiborRates::getLastState(usigned i)const{
+    auto lastState = this->logLibors[i]->realization.back();
+    lastState.value = exp(lastState.value);
+    return lastState;
 }
 
 logLibor const *  LiborRates::getlogLibor(usigned i){
     return this->logLibors[i];
 }
 
-// template<typename Tgen>
-// BarrierCapFloor<Tgen>::BarrierCapFloor(LiborRates<Tgen>& libor, double strike, double bound, bool cap, bool knock_in)
-//     :libor(libor), strike(strike), bound(bound), cap(cap), knock_in(knock_in){};
+ 
+BarrierCapFloor::BarrierCapFloor(LiborRates& libor, bool call, double strike, double bound, bool cap, bool knock_in)
+    :barrierOption(),libor(libor), call(call), strike(strike), bound(bound), cap(cap), knock_in(knock_in){};
 
-// template<typename Tgen>
-// BarrierCapFloor<Tgen>::
+
+template<typename Tgen>
+vector<pair<double, double> > BarrierCapFloor::monteCarloValue(usigned n, Tgen &gen){
+    vector<pair<double, double> > meanVars(n/100);      //store the result every 100 experiments
+    double mean = 0.0;
+    double var = 0.0;
+    for(usigned i=0; i < n; i++){
+        auto result = oneExperiment(gen); 
+        double newMean = mean + (newMean - mean)/(i+1);
+        double term1 = (result*result - var - mean*mean)/(i+1);
+        double term2 = var + mean*mean - newMean*newMean;
+        var = term2 + term1;
+        mean = newMean;
+        if(i % 100 ==0){
+            meanVars[i/100] = make_pair(mean, var);
+        }
+    }
+    return meanVars;
+};
+
+double BarrierCapFloor::averageExitTime(){
+    return 0.0;
+}
+
+double BarrierCapFloor::intrinsicValue(){
+    double v1, v2; 
+    if(isInValue()){
+        double endValue = this->libor.getExitState(0).value;
+        v1 = (call)?max(0.0, endValue - this->strike):max(0.0, this->strike - endValue);
+    }else
+        v1 =  0.0;
+    auto exitIndex = this->libor.getExitIndex(0);
+    v2 = this->zPath[exitIndex].value;
+    return v1+v2;
+}
+
+bool BarrierCapFloor::isInValue(){
+    return (this->libor.ifKnockedBound(0) && this->knock_in) || (!this->libor.ifKnockedBound(0)&& !this->knock_in);
+}
+
+template<typename Tgen>
+double BarrierCapFloor::oneExperiment(Tgen &gen){
+    auto genCopy = gen;  //for zpath since it use the same random seed with libor
+    this->libor.resetAllPath(); 
+    this->zPath.reset();
+    this->libor.makeOnePath(0, gen);
+    this->zPath.generateOnePath(genCopy);
+
+    return this->intrinsicValue();
+}
+
+
+double BarrierCapFloor::closedValue(function<double(double)>sigma){
+    return 0.0;
+}
