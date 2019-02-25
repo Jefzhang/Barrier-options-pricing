@@ -1,14 +1,14 @@
-#pragma once
-
+#include "process.hpp"
 #include "optionPricing.hpp"
 #include<functional>
 
 template<typename Tgen>
-LiborRates<Tgen>::LiborRates(usigned n, double h, vector<double> startDates, vector<double> endDates):N(n), h(h){
+LiborRates<Tgen>::LiborRates(usigned n, double h, vector<double> startTimes, vector<double> endTimes):N(n), h(h){
+    this->logLibors = vector<logLibor<Tgen>*>();
     for(int i=0; i<n; i++){
-        this->logLibors.push_back(new logLibor<Tgen>(startDates[i], endDates[i]));
+        this->logLibors.push_back(new logLibor<Tgen>(startTimes[i], endTimes[i]));
     }
-    this->delta = endDates[0] - startDates[0];
+    this->delta = endTimes[0] - startTimes[0];
     cout<<"We have "<<n<<" libor rate(s) to simulate."<<endl;
 };
 
@@ -23,7 +23,7 @@ LiborRates<Tgen>::~LiborRates(){
 template<typename Tgen>
 double LiborRates<Tgen>::rateAtTime(usigned i, double t){
     usigned  index = (usigned) t/this->h;
-    return exp(this->logLibors.realization[index]);
+    return exp(this->logLibors[i]->realization[index]);
 }
 
 
@@ -98,12 +98,12 @@ void LiborRates<Tgen>::setSensLamda(vector<function<double(state<double>)> > & l
 
 template<typename Tgen>
 void LiborRates<Tgen>::makeOnePath(usigned i){
-    this->logLibors[i].realization.generateOnePath();
+    this->logLibors[i]->realization.generateOnePath();
 }
 
 template<typename Tgen>
 void LiborRates<Tgen>::resetOnePath(usigned i){
-    this->logLibors[i].realization.reset();
+    this->logLibors[i]->realization.reset();
 }
 
 template<typename Tgen>

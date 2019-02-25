@@ -22,6 +22,7 @@ struct logLibor{
     logLibor(double t0, double t1):startTime(t0), endTime(t1){
         realization = boundedPath<euler, Tgen>();
     }
+    ~logLibor(){};
     boundedPath<euler, Tgen> realization;
     double startTime;
     double endTime;
@@ -63,24 +64,22 @@ class LiborRates{
 };
 
 
-template<typename Tvalue, typename Tpath>
-class barrierOption{
+// template<typename Tvalue, typename Tpath>
+// class barrierOption{
 
-        barrierOption() = default;
-        double virtual monteCarloValue()=0;
-        double virtual closedValue()=0;
+//         barrierOption() = default;
+//         double virtual monteCarloValue()=0;
+//         double virtual closedValue()=0;
 
-    private:
-        Tpath underlying;
-        Tvalue strike;
-        Tvalue bound;
-};
+//     private:
+//         Tpath underlying;
+//         Tvalue strike;
+//         Tvalue bound;
+// };
 
-// boundedPath<weakEuler<sde<double, double> >, Tgen>
-template<typename Tgen>
-class BarrierCap: public barrierOption<double, path<state<double> > >{
-    BarrierCap(path<state<double> > underlying, double strike, double bound){};
+// // boundedPath<weakEuler<sde<double, double> >, Tgen>
+// template<typename Tgen>
+// class BarrierCap: public barrierOption<double, path<state<double> > >{
+//     BarrierCap(path<state<double> > underlying, double strike, double bound){};
 
-
-
-};
+// };

@@ -98,6 +98,7 @@ template <typename Tstate>
 struct path : protected vector<Tstate > {
     using vec = vector<Tstate>;  // alias de nom
     using vec::vec;             // constructeur de la classe vector utilisable
+    // using vec::~vec; 
     using vec::operator[];      // opérateur [] utilisable (public)
     using vec::begin;           // itérateurs utilisables (for-range loop)
     using vec::end;
