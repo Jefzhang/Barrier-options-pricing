@@ -1,5 +1,5 @@
 #include<iostream>
-#include "process.hpp"
+// #include "process.hpp"
 #include "optionPricing.hpp"
 
 using namespace std;
@@ -33,7 +33,7 @@ int main(int argc, char const *argv[])
     auto correlation = vector<vector<double> >(1, vector<double>(1, 1.0));
     
 
-    auto liborRates = LiborRates<mt19937_64>(1, h, startTime, endTime);
+    auto liborRates = LiborRates(1, h, startTime, endTime);
     // liborRates.setDynamics(sigma, correlation, initValue, 0);
     // liborRates.setRandomSeeds(gen);
     // liborRates.setBounds(bounds, knock_stop, upbound);

@@ -15,36 +15,20 @@ template <typename Tvalue>
 struct state {
     using value_type = Tvalue;
     state()=default;
-    state(double t, Tvalue v):time(t),value(v){};
-    // state & operator+=(double h, Tvalue v){
-    //     this->time += h;
-    //     this->value += v;
-    //     return *this;
-    // }
-    state & update(double h, Tvalue v){
-        this->time += h;
-        this->value += v;
-        return (*this);
-    }
-
-    Tvalue valueDiff(state const & other){
-        return this->value - other.value;
-    }
+    state(double t, Tvalue v);
+    state & update(double h, Tvalue v);
+    Tvalue valueDiff(state const & other);
 
     double time;
     Tvalue value;
-
 };
 
-template <typename Tvalue>
-ostream & operator<<(ostream & o, state<Tvalue> const & s) {
-    return o << s.time << "\t" << s.value;
-}
 
 template <typename Tstate, typename Tsigma>
 struct sde{
     using state_type = Tstate;
     typedef typename Tstate::value_type Tvalue;
+    sde()=default;
     sde(function<Tvalue(Tstate)> b, function<Tsigma(Tstate)> sigma, Tvalue x0)
         : sig(sigma), init_state(Tstate(0, x0)) { }
 
@@ -63,31 +47,18 @@ struct weakEuler {
     // template <typename TAlgo, typename TRandom> friend struct random_scheme;
    
     weakEuler() = default;
-    weakEuler(Tsde const & sde, double h = 1) 
-        : sde(sde), state(sde.init_state), h(h) {}
+    weakEuler(Tsde const & sde, double h = 1);
 
-    void setState(Tstate newState){
-        this->state = newState;
-    }
+    void setState(Tstate newState);
 
-    void reset(){
-        this->state = sde.init_state;
-    }
+    void reset();
     
     template <typename TWhiteNoise>
-    Tstate operator()(TWhiteNoise const & z) {
-        auto diffusive_part = sqrt(h) * sde.sigma(state) * z;   
-        return state.update(h, diffusive_part);
-        // return this->state();
-    }
+    Tstate operator()(TWhiteNoise const & z);
 
-    Tstate getState(){
-        return this->state;
-    }
+    Tstate getState();
 
-    double getStep(){
-        return h;
-    }
+    double getStep();
 protected:
     Tsde sde; 
     Tstate state;
@@ -115,24 +86,11 @@ std::ostream & operator<<(std::ostream & o, path<Tstate> const & p) {
     return o << std::endl;
 };
 
-template<typename Talgo, typename Tgen, typename Tstate=typename Talgo::result_type>
+template<typename Talgo, typename Tstate=typename Talgo::result_type>
 struct boundedPath : public path<Tstate>{
     typedef typename Tstate::value_type Tvalue;
     boundedPath():path<Tstate>(){}
-    // boundedPath(Talgo  schema, Tgen z, Tstate bound, bool knock_stop, bool upbound, unsigned n)
-    //     :schema(schema), z(z), bound(bound), knock_stop(knock_stop), upbound(upbound){
-    //         rWalk(0.5);
-    //         this->push_back(this->schema.getState());
-    //     };
-    // template<typename Talgo, typename Tgen>
-
-    //clear the vector, keep the other parameters unchanged
-    boundedPath & reset(){
-        this->schema.reset();
-        (*this).clear();
-        (*this).push_back(this->schema.getState());   
-        return (*this);
-    }
+    boundedPath & reset();
 
     void setSchema(Talgo  & schema, unsigned n){
         schema = schema;
@@ -140,118 +98,59 @@ struct boundedPath : public path<Tstate>{
         (*this).push_back(schema.getState());   //push the initial state
     }
 
-    void setRandomSeed(Tgen & z){
-        this->z = z;
-    }
 
-    void setBound(Tstate bound, bool knock_stop, bool upBound){
-        this->bound = bound;
-        this->knock_stop = knock_stop;
-        this->upbound = upBound;
-    }
+    // void setRandomSeed(Tgen & z){
+    //     this->z = z;
+    // }
 
-    void stopAfterKnocked(bool knock_stop){
-        this->knock_stop = knock_stop;
-    }
+    void setBound(Tstate bound, bool knock_stop, bool upBound);
 
-    boundedPath & operator++(){
-        if(!isInSensitiveArea()){
-            normalUpdate();
-        }           
-        else{
-            cout<<"Entered the sensitive zone !"<<endl;
-            sensitiveUpdate();
-        }
-        if(this->size()==n){
-            this->exit_index = n;
-            this->exit_state = this->back();
-        }
-        return (*this);
-    };
+    void stopAfterKnocked(bool knock_stop);
 
-    //copy all the parameters except the vector
-    boundedPath & operator=(boundedPath & other){
-        other.schema.reset();
-        (*this).schema = other.schema;
-        (*this).z = other.z;
-        (*this).bound = other.bound;
-        (*this).n = other.n;
-        (*this).knocked = false;
-        (*this).knock_stop = other.knock_stop;
-        (*this).upbound = other.upbound;
-
-        return (*this);
-    }
-
-    boundedPath & generateOnePath(){
-        for(int i=0; i<n; i++){
-            (*this)++;
-            if(this->knocked && this->knock_stop) break;
-        }
-    };
-
-    void setSensitiveBound(function<Tvalue(Tstate)> lambda){
-        this->lamda = lambda;
-    };
-
+    template<typename Tgen>
     
+    boundedPath & operator()(Tgen & gen);
 
-    bool isInSensitiveArea(){
-        if(upbound){
-            Tvalue sBound = this->bound.value - this->lamda(this->back()) * sqrt(this->schema.getStep());
-            return (this->back().value >= sBound);
-        }else{
-            Tvalue sBound = this->bound.value + this->lamda(this->back()) * sqrt(this->schema.getStep());
-            return (this->back().value <= sBound);
-        }
-    };
+    // //copy all the parameters except the vector
+    // boundedPath & operator=(boundedPath & other){
+    //     other.schema.reset();
+    //     (*this).schema = other.schema;
+    //     (*this).z = other.z;
+    //     (*this).bound = other.bound;
+    //     (*this).n = other.n;
+    //     (*this).knocked = false;
+    //     (*this).knock_stop = other.knock_stop;
+    //     (*this).upbound = other.upbound;
 
-    Tstate & getExitState()const{
-        return this->exit_state;
-    };
+    //     return (*this);
+    // }
+  
+    template<typename Tgen>
+    boundedPath & generateOnePath(Tgen & gen);
 
-    usigned getExitIndex() const{
-        return this->exit_index;
-    };
+    void setSensitiveBound(function<Tvalue(Tstate)> lambda);
 
-    
-   
+    bool isInSensitiveArea();
+
+    Tstate const & getExitState();
+
+    usigned const & getExitIndex(); 
 
     protected:
 
-        double computeAvanceProba(){
-            Tvalue curDist = this->distanceToBound();
-            Tvalue term = this->lamda(this->back()) * sqrt(this->schema.getStep());
-            return term / (term + curDist);
-        };
+        double computeAvanceProba();
 
-        void normalUpdate(){
-            this->push_back(this->schema(rWalk(z)));
-        };
+        template<typename Tgen>
+        void normalUpdate(Tgen &gen);
 
-        void sensitiveUpdate(){
-            double p = this->computeAvanceProba();
-            bernoulli_distribution r(p);
-            if(r(z)){
-                this->knocked = true;
-                this->exit_index = this->size()-1;
-                Tstate newState = Tstate(this->back().time + this->schema.getStep(), this->bound.value);
-                this->push_back(newState);
-                this->exit_state = newState;
-            }else{
-                Tvalue term = this->lamda(this->back()) * sqrt(this->schema.getStep());
-                Tvalue newValue = (upbound)?this->back().value - term: this->back().value + term;
-                this->push_back(Tstate(this->back().time + this->schema.getStep(), newValue));
-            }
-        };
+        template<typename Tgen>
+        void sensitiveUpdate(Tgen &gen);
 
-        Tvalue distanceToBound(){
-            return (this->bound.valueDiff(this->back()));
-        }
-
+        Tvalue distanceToBound();
+ 
     protected: 
         Talgo schema;
-        Tgen & z; //random seed generation 
+        // Tgen & z; //random seed generation 
         Tstate bound;
         unsigned n;
         bool knocked = false;

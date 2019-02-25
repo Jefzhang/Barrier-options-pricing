@@ -2,33 +2,34 @@
 #include "optionPricing.hpp"
 #include<functional>
 
-template<typename Tgen>
-LiborRates<Tgen>::LiborRates(usigned n, double h, vector<double> startTimes, vector<double> endTimes):N(n), h(h){
-    this->logLibors = vector<logLibor<Tgen>*>();
+
+LiborRates::LiborRates(usigned n, double h, vector<double> startTimes, vector<double> endTimes):N(n), h(h){
+    this->logLibors = vector<logLibor* >(n);
     for(int i=0; i<n; i++){
-        this->logLibors.push_back(new logLibor<Tgen>(startTimes[i], endTimes[i]));
+        auto p = new logLibor(startTimes[i], endTimes[i]);
+        this->logLibors[i] = p;
     }
     this->delta = endTimes[0] - startTimes[0];
     cout<<"We have "<<n<<" libor rate(s) to simulate."<<endl;
 };
 
-template<typename Tgen>
-LiborRates<Tgen>::~LiborRates(){
+
+LiborRates::~LiborRates(){
     for(int i=0; i<this->N; i++){
         delete this->logLibors[i];
     }
     this->logLibors.clear();
 };
 
-template<typename Tgen>
-double LiborRates<Tgen>::rateAtTime(usigned i, double t){
+
+double LiborRates::rateAtTime(usigned i, double t){
     usigned  index = (usigned) t/this->h;
-    return exp(this->logLibors[i]->realization[index]);
+    return exp(this->logLibors[i]->realization[index].value);
 }
 
 
-template<typename Tgen>
-void LiborRates<Tgen>::setDynamics(vector<function<double(double)> >& sigma, vector<vector<double> >& correlation, vector<double> & init_values, usigned k){
+
+void LiborRates::setDynamics(vector<function<double(double)> >& sigma, vector<vector<double> >& correlation, vector<double> & init_values, usigned k){
     for(int i=0; i<this->N; i++){
         function<double(Dstate)> bi;
         function<double(Dstate)> sigmai = [i, sigma](Dstate state){
@@ -41,7 +42,7 @@ void LiborRates<Tgen>::setDynamics(vector<function<double(double)> >& sigma, vec
                 for(int j=i+1; j<=k; j++){      
                     double rate = this->rateAtTime(j, t);
                     double vol = sigma[j](t);
-                    sum += this->delta * rate * correlation[i, j] * vol / (1 + this->delta * rate);
+                    sum += this->delta * rate * correlation[i][j] * vol / (1 + this->delta * rate);
                 }
                 return -sigma[i](t) * sum - 0.5 * sigma[i](t) * sigma[i](t);
             };
@@ -53,7 +54,7 @@ void LiborRates<Tgen>::setDynamics(vector<function<double(double)> >& sigma, vec
                 for(int j=k+1; j<=i; j++){      
                     double rate = this->rateAtTime(j, t);
                     double vol = sigma[j](t);
-                    sum += this->delta * rate * correlation[i, j] * vol / (1 + this->delta * rate);
+                    sum += this->delta * rate * correlation[i][j] * vol / (1 + this->delta * rate);
                 }
                 return sigma[i](t) * sum - 0.5 * sigma[i](t) * sigma[i](t);
             };
@@ -71,25 +72,23 @@ void LiborRates<Tgen>::setDynamics(vector<function<double(double)> >& sigma, vec
     }
 }
 
-template<typename Tgen>
-void LiborRates<Tgen>::setRandomSeeds(Tgen & z){
-    for(int i=0; i<this->N; i++){
-        this->logLibors[i]->realization.setRandomSeed(z);
-    }
-    cout<<"Random seed has been set up !"<<endl;
-}
+// void LiborRates::setRandomSeeds(Tgen & z){
+//     for(int i=0; i<this->N; i++){
+//         this->logLibors[i]->realization.setRandomSeed(z);
+//     }
+//     cout<<"Random seed has been set up !"<<endl;
+// }
 
-template<typename Tgen>
-void LiborRates<Tgen>::setBounds(vector<double> & bounds, vector<bool> & knock_stop, vector<bool> & upbound){
+void LiborRates::setBounds(vector<double> & bounds, vector<bool> & knock_stop, vector<bool> & upbound){
     for(int i=0; i<this->N; i++){
-        auto State = Dstate(this->logLibors[i].startTime, log(bounds[i]));
+        auto State = Dstate(this->logLibors[i]->startTime, log(bounds[i]));
         this->logLibors[i]->realization.setBound(State, knock_stop[i], upbound[i]);
     }
     cout<<"Rate bound(s) have been set up !"<<endl;
 }
 
-template<typename Tgen>
-void LiborRates<Tgen>::setSensLamda(vector<function<double(state<double>)> > & lamdas){
+
+void LiborRates::setSensLamda(vector<function<double(state<double>)> > & lamdas){
     for(int i=0; i<this->N; i++){
         this->logLibors[i]->realization.setSensitiveBound(lamdas[i]);
     }
@@ -97,18 +96,35 @@ void LiborRates<Tgen>::setSensLamda(vector<function<double(state<double>)> > & l
 }
 
 template<typename Tgen>
-void LiborRates<Tgen>::makeOnePath(usigned i){
-    this->logLibors[i]->realization.generateOnePath();
+void LiborRates::makeOnePath(usigned i, Tgen & gen){
+    this->logLibors[i]->realization.generateOnePath(gen);
 }
 
-template<typename Tgen>
-void LiborRates<Tgen>::resetOnePath(usigned i){
+void LiborRates::resetOnePath(usigned i){
     this->logLibors[i]->realization.reset();
 }
 
-template<typename Tgen>
-void LiborRates<Tgen>::resetAllPath(){
+void LiborRates::resetAllPath(){ 
     for(int i=0; i<this->N; i++){
         this->resetOnePath(i);
     }
 }
+
+Dstate const & LiborRates::getExitState(usigned i){ 
+    return this->logLibors[i]->realization.getExitState();
+}
+
+Dstate const & LiborRates::getLastState(usigned i){
+    return this->logLibors[i]->realization.back();
+}
+
+logLibor const *  LiborRates::getlogLibor(usigned i){
+    return this->logLibors[i];
+}
+
+// template<typename Tgen>
+// BarrierCapFloor<Tgen>::BarrierCapFloor(LiborRates<Tgen>& libor, double strike, double bound, bool cap, bool knock_in)
+//     :libor(libor), strike(strike), bound(bound), cap(cap), knock_in(knock_in){};
+
+// template<typename Tgen>
+// BarrierCapFloor<Tgen>::
