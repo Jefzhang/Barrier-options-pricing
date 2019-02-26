@@ -60,7 +60,7 @@ class LiborRates{
 
         Dstate getLastState(usigned i)const;
 
-        logLibor const * getlogLibor(usigned i);
+        logLibor* getlogLibor(usigned i)const;
 
 
     private:
@@ -82,8 +82,8 @@ template<typename Tvalue, typename Tpath>
 class barrierOption{
     public:
         barrierOption(){};
-        virtual pair<double, double> monteCarloValue(usigned n)=0;
-        virtual double closedValue()=0;
+        // virtual pair<double, double> monteCarloValue(usigned n)=0;
+        // virtual double closedValue()=0;
 
     private:
         virtual double intrinsicValue()=0;
@@ -106,11 +106,12 @@ class barrierOption{
 
 class BarrierCapFloor: public barrierOption<double, LiborRates>{
     public:
-        BarrierCapFloor(LiborRates& libor, bool call, double strike, double bound, bool cap, bool knock_in);       
+        BarrierCapFloor(LiborRates* libor, normalPath<euler> *zPath, bool call, double strike, double bound, bool cap, bool knock_in);       
         
-        void setZpath(normalPath<euler> & zScheme){
-            this->zPath = zScheme;
-        }
+        ~BarrierCapFloor()=default;
+        // void setZpath(normalPath<euler> & zScheme){
+        //     this->zPath = zScheme;
+        // }
         
         template<typename  Tgen>
         vector<pair<double, double> > monteCarloValue(usigned n, Tgen &gen);
@@ -125,8 +126,8 @@ class BarrierCapFloor: public barrierOption<double, LiborRates>{
         // double valueCompute();
 
     private:
-        LiborRates& libor;
-        normalPath<euler> zPath;
+        LiborRates *libor;
+        normalPath<euler> * zPath;
 
         bool call;
         double strike;
@@ -139,17 +140,20 @@ class BarrierCapFloor: public barrierOption<double, LiborRates>{
 template<typename Tgen>
 vector<pair<double, double> > BarrierCapFloor::monteCarloValue(usigned n, Tgen &gen){
     vector<pair<double, double> > meanVars(n/100);      //store the result every 100 experiments
-    double mean = 0.0;
-    double var = 0.0;
-    for(usigned i=0; i < n; i++){
+    double M = 0.0;
+    double S = 0.0;
+    auto result1 = oneExperiment(gen); 
+    auto result2 = oneExperiment(gen);
+    M = result1+result2;
+    S = (result1 - M/2)*(result1 - M/2) + (result2 - M/2)*(result2 - M/2);
+    for(usigned i=2; i < n; i++){
+        cout<<i<<"-th simulation !"<<endl;
         auto result = oneExperiment(gen); 
-        double newMean = mean + (newMean - mean)/(i+1);
-        double term1 = (result*result - var - mean*mean)/(i+1);
-        double term2 = var + mean*mean - newMean*newMean;
-        var = term2 + term1;
-        mean = newMean;
+        double newM = M + result;
+        S = S + (i*result - M)*(i*result - M)/(i * (i+1));
+        M = newM;
         if(i % 100 ==0){
-            meanVars[i/100] = make_pair(mean, var);
+            meanVars[i/100] = make_pair(M/(i+1), S/(i+1));
         }
     }
     return meanVars;
@@ -158,10 +162,10 @@ vector<pair<double, double> > BarrierCapFloor::monteCarloValue(usigned n, Tgen &
 template<typename Tgen>
 double BarrierCapFloor::oneExperiment(Tgen &gen){
     auto genCopy = gen;  //for zpath since it use the same random seed with libor
-    this->libor.resetAllPath(); 
-    this->zPath.reset();
-    this->libor.makeOnePath(0, gen);
-    this->zPath.generateOnePath(genCopy);
+    this->libor->resetAllPath(); 
+    this->zPath->reset();
+    this->libor->makeOnePath(0, gen);
+    this->zPath->generateOnePath(genCopy);
 
     return this->intrinsicValue();
 }

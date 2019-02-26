@@ -4,23 +4,23 @@
 
 
 LiborRates::LiborRates(usigned n, double h, vector<double> startTimes, vector<double> endTimes):N(n), h(h){
-    this->logLibors = vector<logLibor* >(n);
-    for(int i=0; i<n; i++){
-        auto p = new logLibor(startTimes[i], endTimes[i]);
-        this->logLibors[i] = p;
+    for(int i=0; i<n; i++){     
+        this->logLibors.push_back(new logLibor(startTimes[i], endTimes[i]));
     }
     this->delta = endTimes[0] - startTimes[0];
     cout<<"We have "<<n<<" libor rate(s) to simulate."<<endl;
 };
 
 
-LiborRates::~LiborRates(){
-    for(int i=0; i<this->N; i++){
-        delete this->logLibors[i];
-    }
+LiborRates::~LiborRates(){  
+    for(auto term:this->logLibors){
+        delete term;
+    };
+    
+    cout<<"libor pointers deleted !"<<endl;
     this->logLibors.clear();
+     
 };
-
 
 double LiborRates::rateAtTime(usigned i, double t){
     usigned  index = (usigned) t/this->h;
@@ -117,13 +117,14 @@ Dstate LiborRates::getLastState(usigned i)const{
     return lastState;
 }
 
-logLibor const *  LiborRates::getlogLibor(usigned i){
+logLibor* LiborRates::getlogLibor(usigned i)const{
     return this->logLibors[i];
 }
 
+
  
-BarrierCapFloor::BarrierCapFloor(LiborRates& libor, bool call, double strike, double bound, bool cap, bool knock_in)
-    :barrierOption(),libor(libor), call(call), strike(strike), bound(bound), cap(cap), knock_in(knock_in){};
+BarrierCapFloor::BarrierCapFloor(LiborRates* libor, normalPath<euler> * zPath, bool call, double strike, double bound, bool cap, bool knock_in)
+    :barrierOption(),libor(libor), zPath(zPath), call(call), strike(strike), bound(bound), cap(cap), knock_in(knock_in){};
 
 double BarrierCapFloor::averageExitTime(){
     return 0.0;
@@ -132,19 +133,53 @@ double BarrierCapFloor::averageExitTime(){
 double BarrierCapFloor::intrinsicValue(){
     double v1, v2; 
     if(isInValue()){
-        double endValue = this->libor.getExitState(0).value;
+        double endValue = this->libor->getExitState(0).value;
+        cout<<"In value, final value : "<<endValue<<endl;
         v1 = (call)?max(0.0, endValue - this->strike):max(0.0, this->strike - endValue);
-    }else
+    }else{
+        cout<<"Out of value !"<<endl;
         v1 =  0.0;
-    auto exitIndex = this->libor.getExitIndex(0);
-    v2 = this->zPath[exitIndex].value;
+    }
+    auto exitIndex = this->libor->getExitIndex(0);
+    v2 = (*this->zPath)[exitIndex].value;
+    cout<<"Intrinsic value : "<<v1+v2<<endl;
     return v1+v2;
 }
 
 bool BarrierCapFloor::isInValue(){
-    return (this->libor.ifKnockedBound(0) && this->knock_in) || (!this->libor.ifKnockedBound(0)&& !this->knock_in);
+    cout<<"if knocked : "<<this->libor->ifKnockedBound(0)<<endl;
+    return (this->libor->ifKnockedBound(0) && this->knock_in) || (!this->libor->ifKnockedBound(0)&& !this->knock_in);
 }
 
 double BarrierCapFloor::closedValue(function<double(double)>sigma){
-    return 0.0;
+    auto deltaPlus = [](double x, double v){
+        return (log(x)/v + v/2.0);
+    };
+    auto deltaMinus = [](double x, double v){
+        return (log(x)/v - v/2.0);
+    };
+
+    auto normalCDF = [](double x){
+        return erfc(-x/sqrt(2))/2;
+    };
+
+    double h = this->libor->getlogLibor(0)->realization.getStep();
+    int num= (int) this->libor->getlogLibor(0)->startTime / h;
+    double vi_square = 0.0;
+    for(int i = 0; i<num; i++){
+        double t = i*h;
+        auto sig = sigma(t);
+        vi_square += sig * sig * h;
+    }
+    double vi = sqrt(vi_square);
+    double L = this->libor->rateAtTime(0, 0);
+    double H = exp(this->libor->getlogLibor(0)->realization.getBound());
+    double K = this->strike;
+
+    double term1 = L * (normalCDF(deltaPlus(L/K, vi)) - normalCDF(deltaPlus(L/H, vi)));
+    double term2 = -K * (normalCDF(deltaMinus(L/K, vi)) - normalCDF(deltaMinus(L/H, vi)));
+    double term3 = -H * (normalCDF(deltaPlus(H*H /(K*L), vi)) - normalCDF(deltaPlus(H/L, vi)));
+    double term4 = K*L*(normalCDF(deltaMinus(H*H / (K*L), vi)) - normalCDF(deltaMinus(H/L, vi)))/H ; 
+
+    return term1 + term2 + term3 + term4;
 }

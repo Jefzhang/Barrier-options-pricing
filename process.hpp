@@ -56,7 +56,7 @@ struct sde{
     typedef typename Tstate::value_type Tvalue;
     sde()=default;
     sde(function<Tvalue(Tstate)> b, function<Tsigma(Tstate)> sigma, Tvalue x0)
-        : sig(sigma), init_state(Tstate(0, x0)) { }
+        : b(b), sig(sigma), init_state(Tstate(0, x0)) { }
 
     function<Tvalue(Tstate)> b;
     function<Tsigma(Tstate)> sig;
@@ -75,12 +75,12 @@ struct weakEuler {
     // result_type const operator()(){ return state; }
     // template <typename TAlgo, typename TRandom> friend struct random_scheme;  
     weakEuler() = default;
-    weakEuler(Tsde const & sde, double h = 1);
+    weakEuler(Tsde sde, double h = 1);
     void setState(Tstate newState);
     void reset();
     
     template <typename TWhiteNoise>
-    Tstate operator()(TWhiteNoise const & z);
+    Tstate operator()(TWhiteNoise z);
 
     Tstate getState() const;
 
@@ -92,7 +92,7 @@ protected:
 };
 
 template<typename Tsde, typename Tstate>
-weakEuler<Tsde, Tstate>::weakEuler(Tsde const & sde, double h)
+weakEuler<Tsde, Tstate>::weakEuler(Tsde sde, double h)
 :sde(sde), state(sde.init_state), h(h){}
 
 
@@ -108,9 +108,10 @@ void weakEuler<Tsde, Tstate>::reset(){
 
 template<typename Tsde, typename Tstate>
 template <typename TWhiteNoise>
-Tstate weakEuler<Tsde, Tstate>::operator()(TWhiteNoise const & z) {
+Tstate weakEuler<Tsde, Tstate>::operator()(TWhiteNoise z) {
+    auto linear_part = sde.b(state) * h;
     auto diffusive_part = sqrt(h) * sde.sig(state) * z;
-    return state.update(h, diffusive_part);
+    return state.update(h, linear_part + diffusive_part);
     // return this->state();
 }
 
@@ -161,7 +162,7 @@ struct normalPath : public path<Tstate>{
     normalPath():path<Tstate>(){rWalk = bernoulli_distribution(0.5);};
     normalPath & reset();
 
-    void setSchema(Talgo  & schema, unsigned n){
+    void setSchema(Talgo schema, unsigned n){
         this->schema = schema;
         this->n = n;
         (*this).push_back(schema.getState());   //push the initial state
@@ -172,6 +173,10 @@ struct normalPath : public path<Tstate>{
 
     template<typename Tgen>
     normalPath & generateOnePath(Tgen &gen);
+
+    double getStep()const{
+        return this->schema.getStep();
+    }
 
     protected:
         Talgo schema;
@@ -190,6 +195,7 @@ template<typename Talgo, typename Tstate>
 template<typename Tgen>
 normalPath<Talgo, Tstate> & normalPath<Talgo, Tstate>::operator()(Tgen & gen){
     this->push_back(this->schema(rWalk(gen)?1:-1));
+    return (*this);
 }
 
 template<typename Talgo, typename Tstate>
@@ -210,7 +216,11 @@ template<typename Talgo, typename Tstate=typename Talgo::result_type>
 struct boundedPath : public normalPath<Talgo, Tstate>{
     typedef typename Tstate::value_type Tvalue;
     boundedPath():normalPath<Talgo, Tstate>(){};
-    // boundedPath & reset();
+    boundedPath & reset(){
+        normalPath<Talgo, Tstate>::reset();
+        this->knocked = false;
+        return (*this);
+    }
 
     void setBound(Tstate bound, bool knock_stop, bool upBound);
 
@@ -229,6 +239,8 @@ struct boundedPath : public normalPath<Talgo, Tstate>{
     Tstate  getExitState()const;
 
     usigned  getExitIndex()const; 
+
+    Tvalue getBound()const;
 
     bool ifKnocked()const;
 
@@ -301,10 +313,10 @@ template<typename Talgo, typename Tstate>
 bool boundedPath<Talgo, Tstate>::isInSensitiveArea(){
     if(upbound){
         Tvalue sBound = this->bound.value - this->lamda(this->back()) * sqrt(this->schema.getStep());
-        return (this->back().value >= sBound)&&(this->back().value < sBound);
+        return (this->back().value >= sBound)&&(this->back().value < this->bound.value);
     }else{
         Tvalue sBound = this->bound.value + this->lamda(this->back()) * sqrt(this->schema.getStep());
-        return (this->back().value <= sBound)&&(this->back().value > sBound);
+        return (this->back().value <= sBound)&&(this->back().value > this->bound.value);
     }
 };
 
@@ -317,6 +329,11 @@ template<typename Talgo, typename Tstate>
 usigned boundedPath<Talgo, Tstate>::getExitIndex()const{
     return this->exit_index;
 };
+
+template<typename Talgo, typename Tstate>
+typename boundedPath<Talgo, Tstate>::Tvalue boundedPath<Talgo, Tstate>::getBound()const{
+    return this->bound.value;
+}
 
 template<typename Talgo, typename Tstate>
 bool boundedPath<Talgo, Tstate>::ifKnocked()const{
