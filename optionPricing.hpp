@@ -72,6 +72,11 @@ class LiborRates{
         // double maxDate;   //the last tenor dates
 };
 
+template<typename Tgen>
+void LiborRates::makeOnePath(usigned i, Tgen & gen){
+    this->logLibors[i]->realization.generateOnePath(gen);
+}
+
 
 template<typename Tvalue, typename Tpath>
 class barrierOption{
@@ -130,3 +135,33 @@ class BarrierCapFloor: public barrierOption<double, LiborRates>{
         bool knock_in;
         
 };
+
+template<typename Tgen>
+vector<pair<double, double> > BarrierCapFloor::monteCarloValue(usigned n, Tgen &gen){
+    vector<pair<double, double> > meanVars(n/100);      //store the result every 100 experiments
+    double mean = 0.0;
+    double var = 0.0;
+    for(usigned i=0; i < n; i++){
+        auto result = oneExperiment(gen); 
+        double newMean = mean + (newMean - mean)/(i+1);
+        double term1 = (result*result - var - mean*mean)/(i+1);
+        double term2 = var + mean*mean - newMean*newMean;
+        var = term2 + term1;
+        mean = newMean;
+        if(i % 100 ==0){
+            meanVars[i/100] = make_pair(mean, var);
+        }
+    }
+    return meanVars;
+};
+
+template<typename Tgen>
+double BarrierCapFloor::oneExperiment(Tgen &gen){
+    auto genCopy = gen;  //for zpath since it use the same random seed with libor
+    this->libor.resetAllPath(); 
+    this->zPath.reset();
+    this->libor.makeOnePath(0, gen);
+    this->zPath.generateOnePath(genCopy);
+
+    return this->intrinsicValue();
+}

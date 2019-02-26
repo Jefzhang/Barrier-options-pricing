@@ -11,6 +11,9 @@
 using namespace std;
 typedef unsigned int usigned;
 
+/**********************************************
+ * State declaration and definition
+ **********************************************/
 template <typename Tvalue>
 struct state {
     using value_type = Tvalue;
@@ -23,6 +26,29 @@ struct state {
     Tvalue value;
 };
 
+template <typename Tvalue>
+state<Tvalue>::state(double t, Tvalue v):time(t),value(v){};
+
+template <typename Tvalue>
+state<Tvalue> & state<Tvalue>::update(double h, Tvalue v){
+    this->time += h;
+    this->value += v;
+    return (*this);
+}
+
+template <typename Tvalue>
+Tvalue state<Tvalue>::valueDiff(state const & other){
+    return this->value - other.value;
+}
+
+template <typename Tvalue>
+ostream & operator<<(ostream & o, state<Tvalue> const & s) {
+    return o << s.time << "\t" << s.value;
+}
+
+/***************************************************
+ * stochastic derivative equation  
+ **************************************************/
 
 template <typename Tstate, typename Tsigma>
 struct sde{
@@ -38,19 +64,19 @@ struct sde{
     Tstate init_state;
 };
 
+/*****************************************************
+ * weak euler scheme
+ *****************************************************/
 //TSde : model
 //Tstade : state type
 template <typename Tsde, typename Tstate = typename Tsde::state_type>
 struct weakEuler {
     using result_type = Tstate;
     // result_type const operator()(){ return state; }
-    // template <typename TAlgo, typename TRandom> friend struct random_scheme;
-   
+    // template <typename TAlgo, typename TRandom> friend struct random_scheme;  
     weakEuler() = default;
     weakEuler(Tsde const & sde, double h = 1);
-
     void setState(Tstate newState);
-
     void reset();
     
     template <typename TWhiteNoise>
@@ -64,6 +90,44 @@ protected:
     Tstate state;
     double h;
 };
+
+template<typename Tsde, typename Tstate>
+weakEuler<Tsde, Tstate>::weakEuler(Tsde const & sde, double h)
+:sde(sde), state(sde.init_state), h(h){}
+
+
+template<typename Tsde, typename Tstate>
+void weakEuler<Tsde, Tstate>::setState(Tstate newState){
+    this->state = newState;
+}
+
+template<typename Tsde, typename Tstate>
+void weakEuler<Tsde, Tstate>::reset(){
+    this->state = sde.init_state;
+}
+
+template<typename Tsde, typename Tstate>
+template <typename TWhiteNoise>
+Tstate weakEuler<Tsde, Tstate>::operator()(TWhiteNoise const & z) {
+    auto diffusive_part = sqrt(h) * sde.sig(state) * z;
+    return state.update(h, diffusive_part);
+    // return this->state();
+}
+
+template<typename Tsde, typename Tstate>
+Tstate weakEuler<Tsde, Tstate>::getState() const{
+    return this->state;
+}
+
+template<typename Tsde, typename Tstate>
+double weakEuler<Tsde, Tstate>::getStep() const{
+    return h;
+}
+
+/*************************************************
+ * process path
+ *************************************************/
+
 
 template <typename Tstate>
 struct path : protected vector<Tstate > {
@@ -86,6 +150,10 @@ std::ostream & operator<<(std::ostream & o, path<Tstate> const & p) {
     return o << std::endl;
 };
 
+/*************************************************
+ * Normal stochastic process path
+ * ***********************************************/
+
 template<typename Talgo, typename Tstate = typename Talgo::result_type>
 struct normalPath : public path<Tstate>{
 //    typedef typename Talgo::result_type Tstate
@@ -105,144 +173,11 @@ struct normalPath : public path<Tstate>{
     template<typename Tgen>
     normalPath & generateOnePath(Tgen &gen);
 
-
-
-
     protected:
         Talgo schema;
         unsigned n;
         bernoulli_distribution rWalk;
 };
-
-
-template<typename Talgo, typename Tstate=typename Talgo::result_type>
-struct boundedPath : public normalPath<Talgo, Tstate>{
-    typedef typename Tstate::value_type Tvalue;
-    boundedPath():normalPath<Talgo, Tstate>(){};
-    // boundedPath & reset();
-
-    void setBound(Tstate bound, bool knock_stop, bool upBound);
-
-    void stopAfterKnocked(bool knock_stop);
-
-    template<typename Tgen>
-    boundedPath & operator()(Tgen & gen);
-
-    // //copy all the parameters except the vector
-    // boundedPath & operator=(boundedPath & other){
-    //     other.schema.reset();
-    //     (*this).schema = other.schema;
-    //     (*this).z = other.z;
-    //     (*this).bound = other.bound;
-    //     (*this).n = other.n;
-    //     (*this).knocked = false;
-    //     (*this).knock_stop = other.knock_stop;
-    //     (*this).upbound = other.upbound;
-
-    //     return (*this);
-    // }
-  
-    template<typename Tgen>
-    boundedPath & generateOnePath(Tgen & gen);
-
-    void setSensitiveBound(function<Tvalue(Tstate)> lambda);
-
-    bool isInSensitiveArea();
-
-    Tstate  getExitState()const;
-
-    usigned  getExitIndex()const; 
-
-    bool ifKnocked()const;
-
-    protected:
-
-        double computeAvanceProba();
-
-        template<typename Tgen>
-        void normalUpdate(Tgen &gen);
-
-        template<typename Tgen>
-        void sensitiveUpdate(Tgen &gen);
-
-        Tvalue distanceToBound();
- 
-        
-
-    private: 
-        function<Tvalue(Tstate)> lamda;
-        // bernoulli_distribution rWalk;
-        usigned exit_index; //started from 0 to n
-        Tstate  exit_state;
-
-        // Talgo schema;
-        // Tgen & z; //random seed generation 
-        Tstate bound;
-        // unsigned n;
-        bool knocked = false;
-        bool knock_stop = false;
-        bool upbound = false; //direction 
-};
-
-
-
-template <typename Tvalue>
-state<Tvalue>::state(double t, Tvalue v):time(t),value(v){};
-
-template <typename Tvalue>
-state<Tvalue> & state<Tvalue>::update(double h, Tvalue v){
-    this->time += h;
-    this->value += v;
-    return (*this);
-}
-
-template <typename Tvalue>
-Tvalue state<Tvalue>::valueDiff(state const & other){
-    return this->value - other.value;
-}
-
-template <typename Tvalue>
-ostream & operator<<(ostream & o, state<Tvalue> const & s) {
-    return o << s.time << "\t" << s.value;
-}
-
-template<typename Tsde, typename Tstate>
-weakEuler<Tsde, Tstate>::weakEuler(Tsde const & sde, double h)
-:sde(sde), state(sde.init_state), h(h){}
-
-
-template<typename Tsde, typename Tstate>
-void weakEuler<Tsde, Tstate>::setState(Tstate newState){
-    this->state = newState;
-}
-
-template<typename Tsde, typename Tstate>
-void weakEuler<Tsde, Tstate>::reset(){
-    this->state = sde.init_state;
-}
-
-template<typename Tsde, typename Tstate>
-template <typename TWhiteNoise>
-Tstate weakEuler<Tsde, Tstate>::operator()(TWhiteNoise const & z) {
-    auto diffusive_part = sqrt(h) * sde.sigma(state) * z;
-    return state.update(h, diffusive_part);
-    // return this->state();
-}
-
-template<typename Tsde, typename Tstate>
-Tstate weakEuler<Tsde, Tstate>::getState() const{
-    return this->state;
-}
-
-template<typename Tsde, typename Tstate>
-double weakEuler<Tsde, Tstate>::getStep() const{
-    return h;
-}
-
-
-/******************************************************************
- * Normal path members definition
- ******************************************************************/
 template<typename Talgo, typename Tstate>
 normalPath<Talgo, Tstate> & normalPath<Talgo, Tstate>::reset(){
     this->schema.reset();
@@ -271,13 +206,52 @@ normalPath<Talgo, Tstate>& normalPath<Talgo, Tstate>::generateOnePath(Tgen &gen)
  *              Definition of members of bounedpath class
  *******************************************************************/
 
-// template<typename Talgo, typename Tstate>
-// boundedPath<Talgo, Tstate> & boundedPath<Talgo, Tstate>::reset(){
-//         this->schema.reset();
-//         (*this).clear();
-//         (*this).push_back(this->schema.getState());
-//         return (*this);
-// }
+template<typename Talgo, typename Tstate=typename Talgo::result_type>
+struct boundedPath : public normalPath<Talgo, Tstate>{
+    typedef typename Tstate::value_type Tvalue;
+    boundedPath():normalPath<Talgo, Tstate>(){};
+    // boundedPath & reset();
+
+    void setBound(Tstate bound, bool knock_stop, bool upBound);
+
+    void stopAfterKnocked(bool knock_stop);
+
+    template<typename Tgen>
+    boundedPath & operator()(Tgen & gen);
+  
+    template<typename Tgen>
+    boundedPath & generateOnePath(Tgen & gen);
+
+    void setSensitiveBound(function<Tvalue(Tstate)> lambda);
+
+    bool isInSensitiveArea();
+
+    Tstate  getExitState()const;
+
+    usigned  getExitIndex()const; 
+
+    bool ifKnocked()const;
+
+    protected:
+
+        double computeAvanceProba();
+
+        template<typename Tgen>
+        void normalUpdate(Tgen &gen);
+
+        template<typename Tgen>
+        void sensitiveUpdate(Tgen &gen);
+
+        Tvalue distanceToBound();
+    private: 
+        function<Tvalue(Tstate)> lamda;
+        usigned exit_index; //started from 0 to n
+        Tstate  exit_state;
+        Tstate bound;
+        bool knocked = false;
+        bool knock_stop = false;
+        bool upbound = false; //direction 
+};
 
 template<typename Talgo, typename Tstate>
 void boundedPath<Talgo, Tstate>::setBound(Tstate bound, bool knock_stop, bool upBound){
@@ -294,7 +268,7 @@ void boundedPath<Talgo, Tstate>::stopAfterKnocked(bool knock_stop){
 template<typename Talgo, typename Tstate>
 template<typename Tgen>
 boundedPath<Talgo, Tstate> & boundedPath<Talgo, Tstate>::operator()(Tgen &gen){
-    if(!isInSensitiveArea()){
+    if(this->knocked || !isInSensitiveArea()){
         normalUpdate(gen);
     }
     else{
@@ -327,10 +301,10 @@ template<typename Talgo, typename Tstate>
 bool boundedPath<Talgo, Tstate>::isInSensitiveArea(){
     if(upbound){
         Tvalue sBound = this->bound.value - this->lamda(this->back()) * sqrt(this->schema.getStep());
-        return (this->back().value >= sBound);
+        return (this->back().value >= sBound)&&(this->back().value < sBound);
     }else{
         Tvalue sBound = this->bound.value + this->lamda(this->back()) * sqrt(this->schema.getStep());
-        return (this->back().value <= sBound);
+        return (this->back().value <= sBound)&&(this->back().value > sBound);
     }
 };
 
@@ -359,7 +333,7 @@ double boundedPath<Talgo, Tstate>::computeAvanceProba(){
 template<typename Talgo, typename Tstate>
 template<typename Tgen>
 void boundedPath<Talgo, Tstate>::normalUpdate(Tgen &gen){
-    this->push_back(this->schema(rWalk(gen)?1:-1));
+    this->push_back(this->schema(this->rWalk(gen)?1:-1));
 };
 
 template<typename Talgo, typename Tstate>
@@ -384,4 +358,3 @@ template<typename Talgo, typename Tstate>
 typename boundedPath<Talgo, Tstate>::Tvalue boundedPath<Talgo, Tstate>::distanceToBound(){
     return (this->bound.valueDiff(this->back()));
 }
-

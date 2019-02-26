@@ -1,5 +1,6 @@
 #include<iostream>
 // #include "process.hpp"
+#include <fstream>
 #include "optionPricing.hpp"
 
 using namespace std;
@@ -39,15 +40,17 @@ int main(int argc, char const *argv[])
     lamdas.push_back(g);
     auto correlation = vector<vector<double> >(1, vector<double>(1, 1.0));
     
-
     LiborRates liborRates(1, h, startTime, endTime);
-    // auto liborRates = LiborRates(1, h, startTime, endTime);
-    // liborRates.setDynamics(sigma, correlation, initValue, 0);
+    liborRates.setDynamics(sigma, correlation, initValue, 0);
     // liborRates.setRandomSeeds(gen);
-    // liborRates.setBounds(bounds, knock_stop, upbound);
-    // liborRates.setSensLamda(lamdas);
-    // liborRates.makeOnePath(0);
+    liborRates.setBounds(bounds, knock_stop, upbound);
+    liborRates.setSensLamda(lamdas);
+    liborRates.makeOnePath(0, gen);
 
+    ofstream of;
+    of.open("output/liborPath.txt", ofstream::out | ofstream::app);
+    of<<(*liborRates.getlogLibor(0)).realization<<endl;
+    of.close();
 
     return 0;
 }
