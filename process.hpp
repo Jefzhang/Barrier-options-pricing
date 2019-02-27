@@ -75,25 +75,25 @@ struct weakEuler {
     // result_type const operator()(){ return state; }
     // template <typename TAlgo, typename TRandom> friend struct random_scheme;  
     weakEuler() = default;
-    weakEuler(Tsde sde, double h = 1);
+    weakEuler(Tsde sde);
     void setState(Tstate newState);
     void reset();
     
     template <typename TWhiteNoise>
-    Tstate operator()(TWhiteNoise z);
+    Tstate operator()(double h, TWhiteNoise z);
 
     Tstate getState() const;
 
-    double getStep() const;
+    // double getStep() const;
 protected:
     Tsde sde; 
     Tstate state;
-    double h;
+    // double h;
 };
 
 template<typename Tsde, typename Tstate>
-weakEuler<Tsde, Tstate>::weakEuler(Tsde sde, double h)
-:sde(sde), state(sde.init_state), h(h){}
+weakEuler<Tsde, Tstate>::weakEuler(Tsde sde)
+:sde(sde), state(sde.init_state){}
 
 
 template<typename Tsde, typename Tstate>
@@ -108,7 +108,7 @@ void weakEuler<Tsde, Tstate>::reset(){
 
 template<typename Tsde, typename Tstate>
 template <typename TWhiteNoise>
-Tstate weakEuler<Tsde, Tstate>::operator()(TWhiteNoise z) {
+Tstate weakEuler<Tsde, Tstate>::operator()(double h, TWhiteNoise z) {
     auto linear_part = sde.b(state) * h;
     auto diffusive_part = sqrt(h) * sde.sig(state) * z;
     return state.update(h, linear_part + diffusive_part);
@@ -120,10 +120,10 @@ Tstate weakEuler<Tsde, Tstate>::getState() const{
     return this->state;
 }
 
-template<typename Tsde, typename Tstate>
-double weakEuler<Tsde, Tstate>::getStep() const{
-    return h;
-}
+// template<typename Tsde, typename Tstate>
+// double weakEuler<Tsde, Tstate>::getStep() const{
+//     return h;
+// }
 
 /*************************************************
  * process path
@@ -162,9 +162,14 @@ struct normalPath : public path<Tstate>{
     normalPath():path<Tstate>(){rWalk = bernoulli_distribution(0.5);};
     normalPath & reset();
 
-    void setSchema(Talgo schema, unsigned n){
-        this->schema = schema;
+    void setStep(double h, usigned n){
+        this->h = h;
         this->n = n;
+    };
+
+    void setSchema(Talgo schema){
+        this->schema = schema;
+        // this->n = n;
         (*this).push_back(schema.getState());   //push the initial state
     }
 
@@ -175,12 +180,13 @@ struct normalPath : public path<Tstate>{
     normalPath & generateOnePath(Tgen &gen);
 
     double getStep()const{
-        return this->schema.getStep();
+        return this->h;
     }
 
     protected:
         Talgo schema;
         unsigned n;
+        double h = 0.02;
         bernoulli_distribution rWalk;
 };
 template<typename Talgo, typename Tstate>
@@ -194,7 +200,7 @@ normalPath<Talgo, Tstate> & normalPath<Talgo, Tstate>::reset(){
 template<typename Talgo, typename Tstate>
 template<typename Tgen>
 normalPath<Talgo, Tstate> & normalPath<Talgo, Tstate>::operator()(Tgen & gen){
-    this->push_back(this->schema(rWalk(gen)?1:-1));
+    this->push_back(this->schema(this->h, rWalk(gen)?1:-1));
     return (*this);
 }
 
@@ -210,6 +216,16 @@ normalPath<Talgo, Tstate>& normalPath<Talgo, Tstate>::generateOnePath(Tgen &gen)
 
 /*******************************************************************
  *              Definition of members of bounedpath class
+ * lamda : function to calculate the boudary area
+ * exit_index : time index when knocked the bound
+ * exit_state : (time of exit, bound)
+ * bound : as the name indicates
+ * knocked : flag indicates if the bound is knocked during a path
+ * knock_stop : flag if stop the simulation when the bound is knocked, useful for knock in asset
+ * upbound : flag indicates if it's a cap or floor product
+ * mode : algo type , 1 - algo with with weak order 1
+ *                    2 - algo with with weak order 1/2
+ *                    3 - simple monte carlo 
  *******************************************************************/
 
 template<typename Talgo, typename Tstate=typename Talgo::result_type>
@@ -227,10 +243,10 @@ struct boundedPath : public normalPath<Talgo, Tstate>{
     void stopAfterKnocked(bool knock_stop);
 
     template<typename Tgen>
-    boundedPath & operator()(Tgen & gen);
+    boundedPath & operator()(usigned mode, Tgen & gen);
   
     template<typename Tgen>
-    boundedPath & generateOnePath(Tgen & gen);
+    boundedPath & generateOnePath(usigned mode, Tgen & gen);
 
     void setSensitiveBound(function<Tvalue(Tstate)> lambda);
 
@@ -248,11 +264,13 @@ struct boundedPath : public normalPath<Talgo, Tstate>{
 
         double computeAvanceProba();
 
+        bool exitBoundedArea();
+
         template<typename Tgen>
         void normalUpdate(Tgen &gen);
 
         template<typename Tgen>
-        void sensitiveUpdate(Tgen &gen);
+        void sensitiveUpdate(usigned mode, Tgen &gen);
 
         Tvalue distanceToBound();
     private: 
@@ -263,13 +281,14 @@ struct boundedPath : public normalPath<Talgo, Tstate>{
         bool knocked = false;
         bool knock_stop = false;
         bool upbound = false; //direction 
+        // usigned mode = 1;  //
 };
 
 template<typename Talgo, typename Tstate>
 void boundedPath<Talgo, Tstate>::setBound(Tstate bound, bool knock_stop, bool upBound){
     this->bound = bound;
     this->knock_stop = knock_stop;
-    this->upbound = upBound;
+    this->upbound = upBound; 
 }
 
 template<typename Talgo, typename Tstate>
@@ -279,14 +298,32 @@ void boundedPath<Talgo, Tstate>::stopAfterKnocked(bool knock_stop){
 
 template<typename Talgo, typename Tstate>
 template<typename Tgen>
-boundedPath<Talgo, Tstate> & boundedPath<Talgo, Tstate>::operator()(Tgen &gen){
-    if(this->knocked || !isInSensitiveArea()){
-        normalUpdate(gen);
+boundedPath<Talgo, Tstate> & boundedPath<Talgo, Tstate>::operator()(usigned mode, Tgen &gen){
+    normalUpdate(gen);
+
+    if(mode == 3){    //simple monte carlo simulation
+        if(exitBoundedArea()){
+            this->knocked = true;
+            this->exit_index = (this->size()-1);
+            this->exit_state = this->back();
+        }
+    }else{
+        if(!this->knocked && isInSensitiveArea()){
+            cout<<"Entered the sensitive zone !"<<endl;
+            sensitiveUpdate(mode, gen);
+        }
     }
-    else{
-        cout<<"Entered the sensitive zone !"<<endl;
-        sensitiveUpdate(gen);
-    }
+
+
+    //then check if the new value is in the boundary area, if it is the case, do smoothing
+    
+    // if(this->knocked || !isInSensitiveArea()){
+    //     normalUpdate(gen);
+    // }
+    // else{
+    //     cout<<"Entered the sensitive zone !"<<endl;
+    //     sensitiveUpdate(gen);
+    // }
     if(this->size()==this->n){
         this->exit_index = (this->n+1);
         this->exit_state = this->back();
@@ -296,9 +333,9 @@ boundedPath<Talgo, Tstate> & boundedPath<Talgo, Tstate>::operator()(Tgen &gen){
 
 template<typename Talgo, typename Tstate>
 template<typename Tgen>
-boundedPath<Talgo, Tstate> & boundedPath<Talgo, Tstate>::generateOnePath(Tgen &gen){
+boundedPath<Talgo, Tstate> & boundedPath<Talgo, Tstate>::generateOnePath(usigned mode, Tgen &gen){
     for(int i=0; i<this->n; i++){
-        (*this)(gen);
+        (*this)(mode, gen);
         if(this->knocked && this->knock_stop) break;
     }
     return (*this);
@@ -312,10 +349,10 @@ void boundedPath<Talgo, Tstate>::setSensitiveBound(function<Tvalue(Tstate)> lamb
 template<typename Talgo, typename Tstate>
 bool boundedPath<Talgo, Tstate>::isInSensitiveArea(){
     if(upbound){
-        Tvalue sBound = this->bound.value - this->lamda(this->back()) * sqrt(this->schema.getStep());
+        Tvalue sBound = this->bound.value - this->lamda(this->back()) * sqrt(this->h);
         return (this->back().value >= sBound)&&(this->back().value < this->bound.value);
     }else{
-        Tvalue sBound = this->bound.value + this->lamda(this->back()) * sqrt(this->schema.getStep());
+        Tvalue sBound = this->bound.value + this->lamda(this->back()) * sqrt(this->h);
         return (this->back().value <= sBound)&&(this->back().value > this->bound.value);
     }
 };
@@ -343,31 +380,45 @@ bool boundedPath<Talgo, Tstate>::ifKnocked()const{
 template<typename Talgo, typename Tstate>
 double boundedPath<Talgo, Tstate>::computeAvanceProba(){
     Tvalue curDist = this->distanceToBound();
-    Tvalue term = this->lamda(this->back()) * sqrt(this->schema.getStep());
+    Tvalue term = this->lamda(this->back()) * sqrt(this->h);
     return term / (term + curDist);
 };
 
 template<typename Talgo, typename Tstate>
+bool boundedPath<Talgo, Tstate>::exitBoundedArea(){
+    return (this->upbound)? (this->back().value > this->bound.value):(this->back().value < this->bound.value);
+}
+
+template<typename Talgo, typename Tstate>
 template<typename Tgen>
 void boundedPath<Talgo, Tstate>::normalUpdate(Tgen &gen){
-    this->push_back(this->schema(this->rWalk(gen)?1:-1));
+    this->push_back(this->schema(this->h, this->rWalk(gen)?1:-1));
 };
 
 template<typename Talgo, typename Tstate>
 template<typename Tgen>
-void boundedPath<Talgo, Tstate>::sensitiveUpdate(Tgen &gen){
-    double p = this->computeAvanceProba();
-    bernoulli_distribution r(p);
-    if(r(gen)){
+void boundedPath<Talgo, Tstate>::sensitiveUpdate(usigned mode, Tgen &gen){
+    if(mode == 2){             //algo 2, onece in sensitive area, go to bound directly in next step
         this->knocked = true;
         this->exit_index = this->size()-1;
-        Tstate newState = Tstate(this->back().time + this->schema.getStep(), this->bound.value);
-        this->push_back(newState);
-        this->exit_state = newState;
-    }else{
-        Tvalue term = this->lamda(this->back()) * sqrt(this->schema.getStep());
-        Tvalue newValue = (upbound)?this->back().value - term: this->back().value + term;
-        this->push_back(Tstate(this->back().time + this->schema.getStep(), newValue));
+        this->exit_state = Tstate(this->back().time, this->bound.value);
+    }else{      //mode = 1, algo 1  with weak order 1
+        double p = this->computeAvanceProba();
+        cout<<"To bound with proba "<<p<<endl;
+        bernoulli_distribution r(p);
+        if(r(gen)){
+            cout<<"Change  to the bound at "<<this->back().time<<endl;
+            this->knocked = true;
+            this->exit_index = this->size()-1;
+            this->back().value = this->bound.value;
+            this->exit_state = this->back();
+        }else{
+            cout<<"Retreat at "<<this->back().time<<endl;
+            Tvalue term = this->lamda(this->back()) * sqrt(this->h);
+            Tvalue newValue = (this->upbound)? (this->back().value - term): (this->back().value + term);
+            this->back().value = newValue;
+        }
+        this->schema.setState(this->back());  
     }
 };
 

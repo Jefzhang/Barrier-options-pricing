@@ -3,7 +3,7 @@
 #include<functional>
 
 
-LiborRates::LiborRates(usigned n, double h, vector<double> startTimes, vector<double> endTimes):N(n), h(h){
+LiborRates::LiborRates(usigned n, vector<double> startTimes, vector<double> endTimes):N(n){
     for(int i=0; i<n; i++){     
         this->logLibors.push_back(new logLibor(startTimes[i], endTimes[i]));
     }
@@ -25,6 +25,14 @@ LiborRates::~LiborRates(){
 double LiborRates::rateAtTime(usigned i, double t){
     usigned  index = (usigned) t/this->h;
     return exp(this->logLibors[i]->realization[index].value);
+}
+
+void LiborRates::setStep(double h){
+    this->h = h;
+    for(int i=0; i<this->N; i++){
+        int numStep = (int) this->logLibors[i]->startTime / this->h;
+        this->logLibors[i]->realization.setStep(h, numStep);
+    };
 }
 
 void LiborRates::setDynamics(vector<function<double(double)> >& sigma, vector<vector<double> >& correlation, vector<double> & init_values, usigned k){
@@ -63,9 +71,9 @@ void LiborRates::setDynamics(vector<function<double(double)> >& sigma, vector<ve
             };
         }
         auto sdei = sde<Dstate, double>(bi, sigmai, log(init_values[i]));
-        auto schema = weakEuler<Tsde>(sdei, this->h);
-        int numStep = (int) this->logLibors[i]->startTime / this->h;
-        this->logLibors[i]->realization.setSchema(schema, numStep);
+        auto schema = weakEuler<Tsde>(sdei);
+        // int numStep = (int) this->logLibors[i]->startTime / this->h;
+        this->logLibors[i]->realization.setSchema(schema);
         cout<<"The euler scheme for "<<i+1<<"-th libor rate has been set up !"<<endl;
     }
 }
@@ -133,7 +141,7 @@ double BarrierCapFloor::averageExitTime(){
 double BarrierCapFloor::intrinsicValue(){
     double v1, v2; 
     if(isInValue()){
-        double endValue = this->libor->getExitState(0).value;
+        double endValue = this->libor->getLastState(0).value;
         cout<<"In value, final value : "<<endValue<<endl;
         v1 = (call)?max(0.0, endValue - this->strike):max(0.0, this->strike - endValue);
     }else{
