@@ -2,6 +2,7 @@
 #include "process.hpp"
 #include <fstream>
 #include "optionPricing.hpp"
+#include "barrierCap.hpp"
 #include "util.hpp"
 
 using namespace std;
@@ -23,7 +24,9 @@ int main(int argc, char const *argv[])
 
     // usigned mode = 1;   //algo type, 1 - weak order 1, 2 - weak order 1/2, 3 - simple monte carlo
 
+    
     auto params = getBarrierCapFloorSimuPara(argv);
+    // cout<<params<<endl;
     int N = params.first;
     usigned mode = params.second; //algo type, 1 - weak order 1, 2 - weak order 1/2, 3 - simple monte carlo
     cout<<"We are going to make "<<N<<" simulations with algo type "<<mode<<endl;
@@ -41,12 +44,12 @@ int main(int argc, char const *argv[])
     vector<double> startTime(1, 9);  //one dimension
     vector<double> endTime(1, 10);
     vector<double> initValue(1, 0.13);
-    double zInit = 0.0;
-    vector<double> bounds(1, H);
-    vector<usigned> modes(1, mode);
+    // double zInit = 0.0;
+    // vector<double> bounds(1, H);
+    // vector<usigned> modes(1, mode);
     // vector<bool> knock_stop(1, !knock_in);
-    vector<bool> knock_stop(1, false);
-    vector<bool> upbound(1, cap);
+    // vector<bool> knock_stop(1, false);
+    // vector<bool> upbound(1, cap);
     
 
     vector<function<double(double)> > sigma;    //sigma function of libor rate
@@ -54,46 +57,26 @@ int main(int argc, char const *argv[])
         return 0.25;
     };
     sigma.push_back(f);
-
-    
-    //correlation between libor rates, here is 1 since just one dimension
     auto correlation = vector<vector<double> >(1, vector<double>(1, 1.0));   
 
-    //functions to define the dynamics of Z
-    function<double(state<double>)> zScheme_b = [](state<double>){
-        return 0.0;
-    };
-    function<double(state<double>)> zScheme_sig = [](state<double>){
-        return 0.0;
-    };
     
     LiborRates liborRates(1, startTime, endTime);
     liborRates.setDynamics(sigma, correlation, initValue, 0);
-    liborRates.setBounds(bounds, knock_stop, upbound);
+
+
+    auto barrierCap = BarrierCapFloor(&liborRates, call, K, H, cap, knock_in);
+
     
-
-    auto zPath = normalPath<dEuler>();
-    zPath.setSchema(dEuler(dSde(zScheme_b, zScheme_sig, 0)));
-
-    auto barrierCap = BarrierCapFloor(&liborRates, &zPath, call, K, H, cap, knock_in);
-
-    /*
+    cout<<"mode: "<<mode<<endl;
+    
     string filename = "result/barrierCap_mode"+to_string(mode)+".txt";
+    cout<<filename<<endl;
     createFile(filename);
     ofstream of;
     of.open(filename, ofstream::out | ofstream::app);
     for(auto h:hRange){
         of<<"Step : "<<h<<endl;
-        vector<function<double(state<double>)> > lamdas;   //lamda computation to determine the sensitive bound
-        function<double(state<double>)> g = [h](state<double> t){
-            return -0.5 * 0.25 * 0.25 * sqrt(h) + 0.25;
-        };
-        lamdas.push_back(g);
-
-        liborRates.setSensLamda(lamdas);
-        liborRates.setStep(h);
-
-        zPath.setStep(h, startTime[0]/h);
+        barrierCap.setStep(h);
 
         auto result = barrierCap.monteCarloValue(N, mode, gen);
         for( auto term :result){
@@ -106,25 +89,20 @@ int main(int argc, char const *argv[])
     of<<"Value calculated from analytical form : "<<closedValue<<endl;
     
     of.close();
-    */
+    
 
-    double h = hRange[0];
-    vector<function<double(state<double>)> > lamdas; 
-    function<double(state<double>)> g = [h](state<double> t){
-            return -0.5 * 0.25 * 0.25 * sqrt(h) + 0.25;
-    };
-    lamdas.push_back(g);
-    liborRates.setSensLamda(lamdas);
-    liborRates.setStep(h);
-    ofstream of;
-    of.open("output/liborPath.txt", ofstream::out | ofstream::app);
-    for (int i=0; i<10; i++){
-        cout<<"Path : "<<i<<endl;
-        liborRates.resetOnePath(0);
-        liborRates.makeOnePath(0, mode, gen);
-        of<<(*liborRates.getlogLibor(0)).realization<<endl;
-    }   
-    of.close();
+    // double h = hRange[0];
+    // barrierCap.setStep(h);
+    // ofstream of;
+    // of.open("output/liborPath.txt", ofstream::out | ofstream::app);
+    // for (int i=0; i<10; i++){
+    //     cout<<"Path : "<<i<<endl;
+        
+    //     barrierCap.makeOnePath(mode, gen);       
+    //     of<<liborRates.getlogLibor(0)->realization<<endl;
+    //     barrierCap.reset();
+    // }   
+    // of.close();
 
-    return 0;
+    return 0; 
 }

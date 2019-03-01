@@ -22,18 +22,36 @@ LiborRates::~LiborRates(){
      
 };
 
+// template<typename Tgen>
+void LiborRates::updateOneStep(usigned i, double h, double z){
+    this->logLibors[i]->realization(h, z);
+}
+
+
+//take attension here for multiple variables  
+// template<typename Tgen>
+void LiborRates::updateOneStepForAll(double h, vector<double>& z){
+    for(int i=0; i<this->N; i++){
+        updateOneStep(i, h, z[i]);
+    }
+}
+
 double LiborRates::rateAtTime(usigned i, double t){
-    usigned  index = (usigned) t/this->h;
+    usigned index = 0;
+    if(t!=0){
+        index = (usigned) t/this->logLibors[i]->realization[1].time;
+    }
     return exp(this->logLibors[i]->realization[index].value);
 }
 
-void LiborRates::setStep(double h){
-    this->h = h;
-    for(int i=0; i<this->N; i++){
-        int numStep = (int) this->logLibors[i]->startTime / this->h;
-        this->logLibors[i]->realization.setStep(h, numStep);
-    };
-}
+// void LiborRates::setStep(double h){
+    // this->h = h;
+// }
+//     for(int i=0; i<this->N; i++){
+//         int numStep = (int) this->logLibors[i]->startTime / this->h;
+//         this->logLibors[i]->realization.setStep(h, numStep);
+//     };
+// }
 
 void LiborRates::setDynamics(vector<function<double(double)> >& sigma, vector<vector<double> >& correlation, vector<double> & init_values, usigned k){
     for(int i=0; i<this->N; i++){
@@ -78,21 +96,21 @@ void LiborRates::setDynamics(vector<function<double(double)> >& sigma, vector<ve
     }
 }
 
-void LiborRates::setBounds(vector<double> & bounds, vector<bool> & knock_stop, vector<bool> & upbound){
-    for(int i=0; i<this->N; i++){
-        auto State = Dstate(this->logLibors[i]->startTime, log(bounds[i]));
-        this->logLibors[i]->realization.setBound(State, knock_stop[i], upbound[i]);
-    }
-    cout<<"Rate bound(s) have been set up !"<<endl;
-}
+// void LiborRates::setBounds(vector<double> & bounds, vector<bool> & knock_stop, vector<bool> & upbound){
+//     for(int i=0; i<this->N; i++){
+//         auto State = Dstate(this->logLibors[i]->startTime, log(bounds[i]));
+//         this->logLibors[i]->realization.setBound(State, knock_stop[i], upbound[i]);
+//     }
+//     cout<<"Rate bound(s) have been set up !"<<endl;
+// }
 
 
-void LiborRates::setSensLamda(vector<function<double(state<double>)> > & lamdas){
-    for(int i=0; i<this->N; i++){
-        this->logLibors[i]->realization.setSensitiveBound(lamdas[i]);
-    }
-    cout<<"Sensitive bound(s) have been set up !"<<endl;
-}
+// void LiborRates::setSensLamda(vector<function<double(state<double>)> > & lamdas){
+//     for(int i=0; i<this->N; i++){
+//         this->logLibors[i]->realization.setSensitiveBound(lamdas[i]);
+//     }
+//     cout<<"Sensitive bound(s) have been set up !"<<endl;
+// }
 
 
 void LiborRates::resetOnePath(usigned i){
@@ -105,19 +123,25 @@ void LiborRates::resetAllPath(){
     }
 }
 
-Dstate LiborRates::getExitState(usigned i)const{ 
-    auto exitState = this->logLibors[i]->realization.getExitState();
-    exitState.value = exp(exitState.value);
-    return exitState;
-}
+// Dstate LiborRates::getExitState(usigned i)const{ 
+//     auto exitState = this->logLibors[i]->realization.getExitState();
+//     exitState.value = exp(exitState.value);
+//     return exitState;
+// }
 
-usigned LiborRates::getExitIndex(usigned i)const{
-    return this->logLibors[i]->realization.getExitIndex();
-}
+// usigned LiborRates::getExitIndex(usigned i)const{
+//     return this->logLibors[i]->realization.getExitIndex();
+// }
 
-bool LiborRates::ifKnockedBound(usigned i)const{
-    return this->logLibors[i]->realization.ifKnocked();
-}
+// bool LiborRates::ifKnockedBound(usigned i)const{
+//     return this->logLibors[i]->realization.ifKnocked();
+// }
+
+
+
+void LiborRates::setLastState(usigned i, Dstate state){
+    this->logLibors[i]->realization.setLastState(Dstate(state.time, log(state.value)));
+}  
 
 Dstate LiborRates::getLastState(usigned i)const{
     auto lastState = this->logLibors[i]->realization.back();
@@ -131,63 +155,10 @@ logLibor* LiborRates::getlogLibor(usigned i)const{
 
 
  
-BarrierCapFloor::BarrierCapFloor(LiborRates* libor, normalPath<euler> * zPath, bool call, double strike, double bound, bool cap, bool knock_in)
-    :barrierOption(),libor(libor), zPath(zPath), call(call), strike(strike), bound(bound), cap(cap), knock_in(knock_in){};
+// BarrierCapFloor::BarrierCapFloor(LiborRates* libor, normalPath<euler> * zPath, bool call, double strike, double bound, bool cap, bool knock_in)
+    // :barrierOption(),libor(libor), zPath(zPath), call(call), strike(strike), bound(bound), cap(cap), knock_in(knock_in){};
 
-double BarrierCapFloor::averageExitTime(){
-    return 0.0;
-}
+// double BarrierCapFloor::averageExitTime(){
+//     return 0.0;
+// }
 
-double BarrierCapFloor::intrinsicValue(){
-    double v1, v2; 
-    if(isInValue()){
-        double endValue = this->libor->getLastState(0).value;
-        cout<<"In value, final value : "<<endValue<<endl;
-        v1 = (call)?max(0.0, endValue - this->strike):max(0.0, this->strike - endValue);
-    }else{
-        cout<<"Out of value !"<<endl;
-        v1 =  0.0;
-    }
-    auto exitIndex = this->libor->getExitIndex(0);
-    v2 = (*this->zPath)[exitIndex].value;
-    cout<<"Intrinsic value : "<<v1+v2<<endl;
-    return v1+v2;
-}
-
-bool BarrierCapFloor::isInValue(){
-    cout<<"if knocked : "<<this->libor->ifKnockedBound(0)<<endl;
-    return (this->libor->ifKnockedBound(0) && this->knock_in) || (!this->libor->ifKnockedBound(0)&& !this->knock_in);
-}
-
-double BarrierCapFloor::closedValue(function<double(double)>sigma){
-    auto deltaPlus = [](double x, double v){
-        return (log(x)/v + v/2.0);
-    };
-    auto deltaMinus = [](double x, double v){
-        return (log(x)/v - v/2.0);
-    };
-
-    auto normalCDF = [](double x){
-        return erfc(-x/sqrt(2))/2;
-    };
-
-    double h = this->libor->getlogLibor(0)->realization.getStep();
-    int num= (int) this->libor->getlogLibor(0)->startTime / h;
-    double vi_square = 0.0;
-    for(int i = 0; i<num; i++){
-        double t = i*h;
-        auto sig = sigma(t);
-        vi_square += sig * sig * h;
-    }
-    double vi = sqrt(vi_square);
-    double L = this->libor->rateAtTime(0, 0);
-    double H = exp(this->libor->getlogLibor(0)->realization.getBound());
-    double K = this->strike;
-
-    double term1 = L * (normalCDF(deltaPlus(L/K, vi)) - normalCDF(deltaPlus(L/H, vi)));
-    double term2 = -K * (normalCDF(deltaMinus(L/K, vi)) - normalCDF(deltaMinus(L/H, vi)));
-    double term3 = -H * (normalCDF(deltaPlus(H*H /(K*L), vi)) - normalCDF(deltaPlus(H/L, vi)));
-    double term4 = K*L*(normalCDF(deltaMinus(H*H / (K*L), vi)) - normalCDF(deltaMinus(H/L, vi)))/H ; 
-
-    return term1 + term2 + term3 + term4;
-}
