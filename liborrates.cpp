@@ -1,5 +1,6 @@
 //#include "process.hpp"
-#include "optionPricing.hpp"
+#include "liborrates.hpp"
+#include "util.hpp"
 #include<functional>
 
 
@@ -31,8 +32,14 @@ void LiborRates::updateOneStep(usigned i, double h, double z){
 //take attension here for multiple variables  
 // template<typename Tgen>
 void LiborRates::updateOneStepForAll(double h, vector<double>& z){
+    vector<double> newZ(z.size(), 0.0);
     for(int i=0; i<this->N; i++){
-        updateOneStep(i, h, z[i]);
+        for(int j=0; j<=i; j++){
+            newZ[i] += this->L[i][j] * z[j];
+        }
+    }
+    for(int i=0; i<this->N; i++){
+        updateOneStep(i, h, newZ[i]);
     }
 }
 
@@ -44,16 +51,8 @@ double LiborRates::rateAtTime(usigned i, double t){
     return exp(this->logLibors[i]->realization[index].value);
 }
 
-// void LiborRates::setStep(double h){
-    // this->h = h;
-// }
-//     for(int i=0; i<this->N; i++){
-//         int numStep = (int) this->logLibors[i]->startTime / this->h;
-//         this->logLibors[i]->realization.setStep(h, numStep);
-//     };
-// }
 
-void LiborRates::setDynamics(vector<function<double(double)> >& sigma, vector<vector<double> >& correlation, vector<double> & init_values, usigned k){
+void LiborRates::setDynamics(vector<function<double(double)> >& sigma, vector<vector<double> >& correlation, vector<double> & init_values, int k){
     for(int i=0; i<this->N; i++){
         function<double(Dstate)> bi;
         function<double(Dstate)> sigmai = [i, sigma](Dstate state){
@@ -90,27 +89,13 @@ void LiborRates::setDynamics(vector<function<double(double)> >& sigma, vector<ve
         }
         auto sdei = sde<Dstate, double>(bi, sigmai, log(init_values[i]));
         auto schema = weakEuler<Tsde>(sdei);
-        // int numStep = (int) this->logLibors[i]->startTime / this->h;
         this->logLibors[i]->realization.setSchema(schema);
         cout<<"The euler scheme for "<<i+1<<"-th libor rate has been set up !"<<endl;
     }
+
+    this->L = cholesckyDecomp(correlation);
+    cout<<"Cholesky decomposition for the correlation matrix is completed !"<<endl;
 }
-
-// void LiborRates::setBounds(vector<double> & bounds, vector<bool> & knock_stop, vector<bool> & upbound){
-//     for(int i=0; i<this->N; i++){
-//         auto State = Dstate(this->logLibors[i]->startTime, log(bounds[i]));
-//         this->logLibors[i]->realization.setBound(State, knock_stop[i], upbound[i]);
-//     }
-//     cout<<"Rate bound(s) have been set up !"<<endl;
-// }
-
-
-// void LiborRates::setSensLamda(vector<function<double(state<double>)> > & lamdas){
-//     for(int i=0; i<this->N; i++){
-//         this->logLibors[i]->realization.setSensitiveBound(lamdas[i]);
-//     }
-//     cout<<"Sensitive bound(s) have been set up !"<<endl;
-// }
 
 
 void LiborRates::resetOnePath(usigned i){
@@ -123,20 +108,6 @@ void LiborRates::resetAllPath(){
     }
 }
 
-// Dstate LiborRates::getExitState(usigned i)const{ 
-//     auto exitState = this->logLibors[i]->realization.getExitState();
-//     exitState.value = exp(exitState.value);
-//     return exitState;
-// }
-
-// usigned LiborRates::getExitIndex(usigned i)const{
-//     return this->logLibors[i]->realization.getExitIndex();
-// }
-
-// bool LiborRates::ifKnockedBound(usigned i)const{
-//     return this->logLibors[i]->realization.ifKnocked();
-// }
-
 
 
 void LiborRates::setLastState(usigned i, Dstate state){
@@ -148,6 +119,42 @@ Dstate LiborRates::getLastState(usigned i)const{
     lastState.value = exp(lastState.value);
     return lastState;
 }
+
+vector<double> LiborRates::getLastValue()const{
+    vector<double> result(this->N, 0.0); 
+    for(int i=0; i<this->N; i++){
+        result[i] = this->getLastState(i).value;
+    }
+    return result;
+}
+
+double LiborRates::getGlobalSigmaMax(double h)const{
+    double maxResult = numeric_limits<double>::min();
+    for(int i=0; i<this->N; i++){
+        maxResult = max(maxResult, this->getGlobalSigmaMaxFor(i, h));
+    }
+    return maxResult;
+}
+
+
+double LiborRates::getGlobalSigmaMaxFor(unsigned i, double h)const{
+    double maxResult = numeric_limits<double>::min();
+    int num = this->logLibors[i]->startTime / h;
+    for(int  j=0; j<num; j++){
+        maxResult = max(maxResult, this->logLibors[i]->realization.getSchema().getSde().sig(Dstate(j*h, 0)));
+    }
+    return maxResult;
+}
+
+double LiborRates::getLocalSigmaMax()const{
+    double maxResult = numeric_limits<double>::min();
+    for(int i=0; i<this->N; i++){
+        auto state = this->logLibors[i]->realization.back();
+        maxResult = max(maxResult, this->logLibors[i]->realization.getSchema().getSde().sig(state));
+    } 
+}
+
+
 
 logLibor* LiborRates::getlogLibor(usigned i)const{
     return this->logLibors[i];

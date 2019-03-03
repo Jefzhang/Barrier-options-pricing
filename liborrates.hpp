@@ -4,6 +4,7 @@
 #include<random>
 #include "process.hpp"
 
+
 using namespace std;
 typedef state<double> Dstate;
 typedef sde<Dstate, double> Tsde;
@@ -37,43 +38,35 @@ class LiborRates{
 
         double rateAtTime(usigned i, double t);
         //Set sde functions
-        void setDynamics(vector<function<double(double)> > &sigma, vector<vector<double> > & correlations, vector<double> & init_values, usigned k);
+        void setDynamics(vector<function<double(double)> > &sigma, vector<vector<double> > & correlations, vector<double> & init_values, int k);
         
-        // //set time step 
-        // void setStep(double h);
-
-        //set state ToDo
         void setLastState(usigned i, Dstate state);
 
-        //Set bounds
-        // void setBounds(vector<double> & bounds, vector<bool> & knock_stop, vector<bool> & upbound);
-        
-        //Set sensitive bounds' lambda 
-        // void setSensLamda(vector<function<double(state<double>)> > & lamdas);
-        //generate one path for i-th log libor rate under forward-proba T_k+1
-        // template<typename Tgen>
-        // void makeOnePath(usigned i, usigned mode, Tgen &gen);
-
-        //ToDo
-        // template<typename Tgen>
         void updateOneStepForAll(double h, vector<double>& z);
 
-        // template<typename Tgen>
         void updateOneStep(usigned i, double h, double z);
 
         void resetOnePath(usigned i);
 
         void resetAllPath();
 
-        //*************To modify 
-
-        // Dstate getExitState(usigned i)const;
-
-        // usigned getExitIndex(usigned i)const;
-
-        // bool ifKnockedBound(usigned i)const;
-
         Dstate getLastState(usigned i)const;
+
+        vector<double> getLastValue()const;
+
+        double getGlobalSigmaMax(double h)const;
+
+        double getLocalSigmaMax()const;
+
+        double getGlobalSigmaMaxFor(unsigned i, double h)const;
+
+        usigned getNumLibors()const{
+            return this->N;
+        }
+
+        double getDelta()const{
+            return this->delta;
+        }
 
         logLibor* getlogLibor(usigned i)const;
 
@@ -81,6 +74,7 @@ class LiborRates{
     private:
         vector<logLibor* > logLibors; //contains pointers to loglibors
         // vector<double> tDates; //tenor dates
+        vector<vector<double> > L;  //cholesky decomposition of correlation matrix
         usigned N;
         double delta;
         double h;

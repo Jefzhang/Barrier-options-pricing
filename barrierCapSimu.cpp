@@ -1,7 +1,7 @@
 #include<iostream>
 #include "process.hpp"
 #include <fstream>
-#include "optionPricing.hpp"
+#include "liborrates.hpp"
 #include "barrierCap.hpp"
 #include "util.hpp"
 
@@ -67,10 +67,7 @@ int main(int argc, char const *argv[])
     auto barrierCap = BarrierCapFloor(&liborRates, call, K, H, cap, knock_in);
 
     
-    cout<<"mode: "<<mode<<endl;
-    
     string filename = "result/barrierCap_mode"+to_string(mode)+".txt";
-    cout<<filename<<endl;
     createFile(filename);
     ofstream of;
     of.open(filename, ofstream::out | ofstream::app);

@@ -166,11 +166,6 @@ struct normalPath : public path<Tstate>{
     normalPath():path<Tstate>(){};
     normalPath & reset();
 
-    // void setStep(double h, usigned n){
-    //     this->h = h;
-    //     this->n = n;
-    // };
-
     void setLastState(Tstate state){
         this->back() = state;
         this->schema.setState(state);
@@ -178,19 +173,12 @@ struct normalPath : public path<Tstate>{
 
     void setSchema(Talgo schema){
         this->schema = schema;
-        // this->n = n;
         (*this).push_back(schema.getState());   //push the initial state
     }
 
     template<typename Twhitenoise>
     normalPath & operator()(double h, Twhitenoise z);
 
-    // template<typename Tgen>
-    // normalPath & generateOnePath(double h, Tgen &gen);
-
-    // double getStep()const{
-    //     return this->h;
-    // }
 
     Talgo getSchema()const{
         return this->schema;
@@ -198,8 +186,6 @@ struct normalPath : public path<Tstate>{
 
     protected:
         Talgo schema;
-        // unsigned n;
-        // bernoulli_distribution rWalk;
 };
 template<typename Talgo, typename Tstate>
 normalPath<Talgo, Tstate> & normalPath<Talgo, Tstate>::reset(){

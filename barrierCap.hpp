@@ -1,5 +1,5 @@
 #include <iostream>
-#include "optionPricing.hpp"
+#include "liborrates.hpp"
 
 
 typedef state<double> dState;
@@ -142,8 +142,8 @@ void BarrierCapFloor::sensitiveUpdate(usigned mode, Tgen &gen){
             this->libor->setLastState(0, state<double>(this->exit_index * this->h, this->bound));
             this->exit_state = this->libor->getLastState(0);
         }else{
-            auto lastState = this->libor->getLastState(0);
             // cout<<"Retreat at "<<lastState.time<<endl;
+            auto lastState = this->libor->getLastState(0);
             double term = this->lamda_sqrth();
             double newValue = (this->cap)? exp(log(lastState.value) - term) : exp(log(lastState.value) + term);
             this->libor->setLastState(0, state<double>(lastState.time, newValue));
