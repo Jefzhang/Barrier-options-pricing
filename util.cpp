@@ -25,6 +25,7 @@ vector<vector<double> > cholesckyDecomp(vector<vector<double> >&A){
             corr(i,j) = A[i][j];
         }
     MatrixXd L = corr.llt().matrixL();
+    // L.transpose();
     vector<vector<double> > res(row, vector<double>(col, 0.0));
     for(int i=0; i<row; i++)
         for(int j=0; j<col; j++){

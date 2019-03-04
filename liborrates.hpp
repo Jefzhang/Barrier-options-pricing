@@ -68,12 +68,17 @@ class LiborRates{
             return this->delta;
         }
 
+        vector<vector<double> > getCorrelations()const{
+            return this->correlations;
+        }
+
         logLibor* getlogLibor(usigned i)const;
 
 
     private:
         vector<logLibor* > logLibors; //contains pointers to loglibors
         // vector<double> tDates; //tenor dates
+        vector<vector<double> >correlations;
         vector<vector<double> > L;  //cholesky decomposition of correlation matrix
         usigned N;
         double delta;

@@ -23,14 +23,11 @@ LiborRates::~LiborRates(){
      
 };
 
-// template<typename Tgen>
 void LiborRates::updateOneStep(usigned i, double h, double z){
     this->logLibors[i]->realization(h, z);
 }
 
 
-//take attension here for multiple variables  
-// template<typename Tgen>
 void LiborRates::updateOneStepForAll(double h, vector<double>& z){
     vector<double> newZ(z.size(), 0.0);
     for(int i=0; i<this->N; i++){
@@ -92,7 +89,7 @@ void LiborRates::setDynamics(vector<function<double(double)> >& sigma, vector<ve
         this->logLibors[i]->realization.setSchema(schema);
         cout<<"The euler scheme for "<<i+1<<"-th libor rate has been set up !"<<endl;
     }
-
+    this->correlations = correlation;
     this->L = cholesckyDecomp(correlation);
     cout<<"Cholesky decomposition for the correlation matrix is completed !"<<endl;
 }

@@ -1,5 +1,6 @@
 #pragma once
 #include "liborrates.hpp"
+#include <fstream>
 #include "optim/header_only_version/optim.hpp"
 
 class barrierSwaption:public barrierOption<double, LiborRates>{
@@ -12,7 +13,7 @@ class barrierSwaption:public barrierOption<double, LiborRates>{
         void setStep(double h);
 
         template<typename  Tgen>
-        vector<pair<double, double> > monteCarloValue(usigned n, usigned mode, Tgen &gen);
+        void monteCarloValue(usigned n, usigned mode, Tgen &gen, ofstream & of);
 
         template<typename Tgen>
         double oneExperiment(usigned mode, Tgen &gen);
@@ -24,7 +25,7 @@ class barrierSwaption:public barrierOption<double, LiborRates>{
             return this->libor;
         };
 
-        double approxValue(function<double(double)> sigma);
+        double approxValue();
 
         void reset();
 
@@ -60,6 +61,8 @@ class barrierSwaption:public barrierOption<double, LiborRates>{
 
         double rateSwap(double delta, vector<double>& L);
 
+        
+
 
     private:
         LiborRates *libor;
@@ -79,6 +82,9 @@ class barrierSwaption:public barrierOption<double, LiborRates>{
         vector<state<double> > exit_state;
 
         double sigMax;
+
+        double P_T0;
+        // double averageExitTime; 
 
 };
 
@@ -116,7 +122,6 @@ void barrierSwaption::sensitiveUpdate(unsigned mode, Tgen &gen){
         this->knocked = true;
         this->exit_index = this->libor->getlogLibor(0)->realization.size() - 1;
         auto projection = this->projectionCalculate();
-        // this->exit_state = vector<state<double> >(this->libor->getNumLibors());
         for(int i=0; i<this->exit_state.size(); i++){
             this->exit_state[i] = state<double>(this->exit_index * this->h, exp(projection.first[i]));
             this->libor->setLastState(i, this->exit_state[i]);
@@ -128,16 +133,16 @@ void barrierSwaption::sensitiveUpdate(unsigned mode, Tgen &gen){
         cout<<"Advance to projection with proba "<<p<<endl;
         bernoulli_distribution r(p);
         if(r(gen)){ //to the projection
-            cout<<"To the projection :"<<endl;
+            // cout<<"To the projection :"<<endl;
             this->knocked = true;
             this->exit_index = this->libor->getlogLibor(0)->realization.size() - 1;
             for(int i=0; i<this->exit_state.size(); i++){
                 this->exit_state[i] = state<double>(this->exit_index * this->h, exp(projection.first[i]));
                 this->libor->setLastState(i, this->exit_state[i]);
-                cout<<"Libor "<<i<<"\t : "<<log(this->exit_state[i].value)<<endl;
+                // cout<<"Libor "<<i<<"\t : "<<log(this->exit_state[i].value)<<endl;
             }
         }else{  //retreat
-            cout<<"Retreat to :"<<endl;
+            // cout<<"Retreat to :"<<endl;
             auto lastValue  = this->libor->getLastValue();
             double t = this->libor->getLastState(0).time;
             for(auto it = lastValue.begin(); it!=lastValue.end(); it++){
@@ -148,7 +153,7 @@ void barrierSwaption::sensitiveUpdate(unsigned mode, Tgen &gen){
             for(int i=0; i<lastValue.size(); i++){
                 double newValue = lastValue[i] + lamda * (lastValue[i] - projection.first[i]) / projection.second;
                 this->libor->setLastState(i, state<double>(t, exp(newValue)));
-                cout<<"Libor "<<i<<"\t : "<<newValue<<endl;
+                // cout<<"Libor "<<i<<"\t : "<<newValue<<endl;
             }
         }
 
@@ -179,23 +184,27 @@ double barrierSwaption::oneExperiment(usigned mode, Tgen &gen){
 }
 
 template<typename Tgen>
-vector<pair<double, double> > barrierSwaption::monteCarloValue(usigned n, usigned mode, Tgen &gen){
-    vector<pair<double, double> > meanVars(n/100);      //store the result every 100 experiments
+void barrierSwaption::monteCarloValue(usigned n, usigned mode, Tgen &gen, ofstream& of){
+    // vector<pair<double, double> > meanVars(n/100);      //store the result every 100 experiments
     double M = 0.0;
     double S = 0.0;
+    double averageExitTime  = 0.0;
     auto result1 = oneExperiment(mode, gen); 
+    averageExitTime += this->exit_index * this->h;
     auto result2 = oneExperiment(mode, gen);
+    averageExitTime += this->exit_index * this->h;
     M = result1+result2;
     S = (result1 - M/2)*(result1 - M/2) + (result2 - M/2)*(result2 - M/2);
     for(usigned i=2; i < n; i++){
         cout<<i<<"-th simulation !"<<endl;
         auto result = oneExperiment(mode, gen); 
+        averageExitTime += this->exit_index * this->h;
         double newM = M + result;
         S = S + (i*result - M)*(i*result - M)/(i * (i+1));
         M = newM;
         if((i+1) % 100 ==0){
-            meanVars[(i+1)/100 - 1] = make_pair(M/(i+1), S/(i+1));
+            of<<M/(i+1)<<'\t'<<S/(i+1)<<'\n';
         }
     }
-    return meanVars;
+    of<<"Average exit time :"<<averageExitTime/n<<'\n';
 };

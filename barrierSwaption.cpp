@@ -5,6 +5,9 @@ barrierSwaption::barrierSwaption(LiborRates* libor, bool call, double strike, do
         this->rWalk = bernoulli_distribution(0.5);
         this->exit_index = 0;
         this->exit_state = vector<state<double> >(this->libor->getNumLibors());
+        double initL = exp(this->libor->getlogLibor(0)->realization[0].value);
+        double price_L0 = 1.0 / pow(1.0+this->libor->getDelta()*initL, this->libor->getlogLibor(0)->startTime);
+        this->P_T0 = price_L0;
     }
 
 void barrierSwaption::setStep(double h){
@@ -12,10 +15,6 @@ void barrierSwaption::setStep(double h){
     this->sigMax = this->libor->getGlobalSigmaMax(h);
 }
 
-double barrierSwaption::approxValue(function<double(double)> sigma){
-    //ToDo
-    return 0.0;
-}
 
 void barrierSwaption::reset(){
     this->libor->resetAllPath();
@@ -90,15 +89,6 @@ pair<vector<double>, double> barrierSwaption::projectionCalculate(){
         vector<double>* params = static_cast<vector<double>*>(opt_data);
         const double R_up = (*params)[0];
         const double delta = (*params)[1];
-        
-        // double factor = 1.0;
-        // double somme = 0.0;
-        // for(int i=0;i<vals_inp.size(); i++){
-        //     factor *= (1+delta* exp(vals_inp[vals_inp.size()-1]));
-        //     somme += factor;
-        // }
-        // double L_proj_0 =  (R_up * (1 + somme)+1)/factor - 1.0/delta;
-        // L_proj_0 = log(L_proj_0);
         double L_proj_0 = L_proj_0_comp(delta, R_up, vals_inp);
         double result = pow(L_proj_0 - (*params)[2], 2);
         for(int i=0; i<vals_inp.size(); i++){
@@ -120,6 +110,11 @@ pair<vector<double>, double> barrierSwaption::projectionCalculate(){
         input_val[i] = log(lastValue[i+1]);
     }
     chrono::time_point<chrono::system_clock> start = chrono::system_clock::now();
+    optim::algo_settings_t settings;
+    settings.vals_bound = true;
+    settings.upper_bounds = input_val + arma::ones(input_val.size(),1)*this->lamda_sqrth()/sqrt(lastValue.size());
+    settings.lower_bounds = input_val - arma::ones(input_val.size(),1)*this->lamda_sqrth()/sqrt(lastValue.size());
+    // bool success = optim::de(input_val, objectiveFunc, &params, settings); 
     bool success = optim::de(input_val, objectiveFunc, &params); 
     chrono::time_point<chrono::system_clock> end = chrono::system_clock::now();
     chrono::duration<double> elapsed_seconds = end-start; 
@@ -148,9 +143,7 @@ double barrierSwaption::lamda_sqrth(){
     return sqrt(N) * (pow(this->sigMax, 2)*this->h*N - 0.5*pow(this->sigMax, 2)*this->h + this->sigMax*sqrt(this->h * N));
 }
 
-
 double barrierSwaption::rateSwap(double delta, vector<double>& L){
-    // vector<double> L_factoriels(L.size(), 0.0);
     double temp = 1.0;
     double somme = 0.0;
     for(int i = 0; i<L.size()-1; i++){
@@ -180,9 +173,8 @@ double barrierSwaption::intrinsicValue(){
             priceSum += price;
             // priceSum += (1/ (i * this->libor->getDelta() * lastValue[i] + 1));
         }
-        double v1 = (this->call)?max(0.0, rate - this->strike):max(0.0, this->strike - rate);
-        return this->libor->getDelta() * v1 * priceSum;
-        // return v1;
+        double v1 = (this->call)?max(0.0, rate - this->strike):max(0.0, this->strike - rate);        
+        return this->P_T0 * this->libor->getDelta() * v1 * priceSum;
     }else{
         return 0.0;
     }
@@ -191,4 +183,87 @@ double barrierSwaption::intrinsicValue(){
 bool barrierSwaption::isInValue(){
     cout<<"if knocked : "<<this->knocked<<endl;
     return (this->knocked && this->knock_in) || (!this->knocked && !this->knock_in);
+}
+
+double barrierSwaption::approxValue(){
+    auto deltaPlus = [](double x, double v){
+        return (log(x)/v + v/2.0);
+    };
+    auto deltaMinus = [](double x, double v){
+        return (log(x)/v - v/2.0);
+    };
+
+    auto normalCDF = [](double x){
+        return erfc(-x/sqrt(2))/2;
+    };
+
+    auto omega = [](unsigned i, double delta, vector<double>&factoriels){
+        double somme = 0.0;
+        for(int i=0; i<factoriels.size(); i++){
+            somme += 1.0 / factoriels[i];
+        }
+        somme *= delta;
+        // return 
+        return delta / factoriels[i] / somme;
+        // double temp = (i==0)?1:factoriels[i-1];
+        // return (1.0 - temp)/somme;
+    };
+
+    auto vLMM_ij = [this](unsigned i, unsigned j, double R_swap, vector<double>& omegas, vector<double>& Ls, vector<vector<double> >&correlation){
+        double T0 = this->libor->getlogLibor(0)->startTime;
+        auto scheme_i = this->libor->getlogLibor(i)->realization.getSchema().getSde();
+        auto scheme_j = this->libor->getlogLibor(j)->realization.getSchema().getSde();
+        double step = 0.05;
+        int num = int(T0 / step);
+        double integral = 0.0;
+        for(int k=0; k<num; k++){
+            integral += scheme_i.sig(Dstate(k*step, 0.0)) * scheme_j.sig(Dstate(k*step, 0.0)) * step;
+        }
+        return omegas[i]*omegas[j]*Ls[i]*Ls[j]*correlation[i][j] * integral / pow(R_swap, 2);
+    };
+
+    double delta = this->libor->getDelta();
+    double K = this->strike;
+    double Rup = this->bound;
+
+    auto correlation = this->libor->getCorrelations();
+    vector<double> Ls = vector<double>(this->libor->getNumLibors(), 0.0);
+    vector<double> Lfactoriels = vector<double>(Ls.size(), 1.);   
+    double temp = 1.0;
+    double priceSum = 0.0;
+    double initPrice = 1./pow(1+delta * exp(this->libor->getlogLibor(0)->realization[0].value), this->libor->getlogLibor(0)->startTime);
+    for(int i=0; i<Ls.size(); i++){
+        Ls[i] = exp(this->libor->getlogLibor(i)->realization[0].value);
+        temp *= (1+delta * Ls[i]);
+        Lfactoriels[i] = temp;
+        initPrice /= (1+delta * Ls[i]);
+        priceSum += initPrice;
+    }
+    double Rswap = this->rateSwap(delta, Ls);
+    vector<double> omegas = vector<double>(Ls.size(), 0.0);
+    for(int i=0; i<omegas.size(); i++){
+        omegas[i] = omega(i, delta, Lfactoriels);
+    }
+    cout<<"Omega conputed "<<endl;
+    double vLMM = 0.0;
+
+    for(int i=0; i<omegas.size(); i++)
+        for(int j=0; j<i; j++){
+            vLMM += vLMM_ij(i, j, Rswap, omegas, Ls, correlation);
+        }
+    vLMM *=2;
+    for(int i=0; i<omegas.size(); i++)
+        vLMM += vLMM_ij(i, i, Rswap, omegas, Ls, correlation);
+    vLMM = sqrt(vLMM);
+    cout<<"Vswap computed"<<endl;
+    
+    double term1 = Rswap *(normalCDF(deltaPlus(Rswap/K, vLMM)) - normalCDF(deltaPlus(Rswap/Rup, vLMM)));
+    double term2 = -K * (normalCDF(deltaMinus(Rswap/K, vLMM)) - normalCDF(deltaMinus(Rswap/Rup, vLMM)));
+    double term3 = -Rup * (normalCDF(deltaPlus(pow(Rup, 2)/ (Rswap * K), vLMM)) - normalCDF(deltaPlus(Rup/Rswap, vLMM)));
+    double term4 = K*Rswap*(normalCDF(deltaMinus(pow(Rup, 2)/(K*Rswap), vLMM)) - normalCDF(deltaMinus(Rup/Rswap, vLMM)))/ Rup;
+
+
+
+    return delta * priceSum * (term1+term2+term3+term4) ;
+
 }
