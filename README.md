@@ -7,14 +7,13 @@
     * mode = 2, the random walk algorithm 2 introduced in the paper, with weak error rate 1/2 
     * mode = 3, traditional monte calro method
 
-### To run the simulation for barrier cap/floor :
-'''cpp
-    //run the simulation for 10000 times with algo type 1
+### To run the simulation for barrier cap/floor, with 10000 times and algo type 1:
+'''
     make barrierCap N=10000 mode=1
 '''
 
-### To run the simulation for barrier swaption :
-'''cpp
-    //run the simulation for 10000 times with algo type 1
+### To run the simulation for barrier swaption, with 10000 times and algo type 1:
+'''
     make barrierSwap N=10000 mode=1
+'''
 
