@@ -8,13 +8,13 @@
     * mode = 3, traditional monte calro method
 
 ### To run the simulation for barrier cap/floor :
-'''c++
+'''cpp
     //run the simulation for 10000 times with algo type 1
     make barrierCap N=10000 mode=1
 '''
 
 ### To run the simulation for barrier swaption :
-'''c++
+'''cpp
     //run the simulation for 10000 times with algo type 1
     make barrierSwap N=10000 mode=1
 
