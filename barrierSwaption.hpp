@@ -196,7 +196,9 @@ void barrierSwaption::monteCarloValue(usigned n, usigned mode, Tgen &gen, ofstre
     M = result1+result2;
     S = (result1 - M/2)*(result1 - M/2) + (result2 - M/2)*(result2 - M/2);
     for(usigned i=2; i < n; i++){
-        cout<<i<<"-th simulation !"<<endl;
+        if((i+1) % 100 ==0){
+            cout<<i+1<<"-th simulation !"<<endl;
+        }
         auto result = oneExperiment(mode, gen); 
         averageExitTime += this->exit_index * this->h;
         double newM = M + result;

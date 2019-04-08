@@ -33,13 +33,12 @@ int main(int argc, char const *argv[])
 
     // double h = 0.02;
     // vector<double> hRange {0.025, 0.05, 0.1, 0.125, 0.2};
-    vector<double> hRange {0.02};
+    vector<double> hRange {0.02, 0.05, 0.1, 0.125, 0.2, 0.25, 0.5};
     double K = 0.01;
     double H = 0.28;
     bool call = true;
     bool cap = true;
     double knock_in = false;
-
 
     vector<double> startTime(1, 9);  //one dimension
     vector<double> endTime(1, 10);
@@ -70,7 +69,7 @@ int main(int argc, char const *argv[])
     string filename = "result/barrierCap_mode"+to_string(mode)+".txt";
     createFile(filename);
     ofstream of;
-    of.open(filename, ofstream::out | ofstream::app);
+    of.open(filename, ofstream::out | ofstream::app); 
     for(auto h:hRange){
         of<<"Step : "<<h<<endl;
         barrierCap.setStep(h);

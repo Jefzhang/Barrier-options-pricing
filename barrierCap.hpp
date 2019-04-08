@@ -62,7 +62,7 @@ class BarrierCapFloor: public barrierOption<double, LiborRates>{
         double intrinsicValue();
         bool isInValue();
 
-        
+        double zPath_F(Dstate lastState);
 
         
 
@@ -80,6 +80,7 @@ class BarrierCapFloor: public barrierOption<double, LiborRates>{
         bool cap;
         bool knock_in;
         bool knocked;
+        double vi; //Only for colosed form value 
         usigned exit_index;
         state<double> exit_state;       
 };
@@ -93,7 +94,7 @@ void BarrierCapFloor::makeOnePath(usigned mode, Tgen &gen){
         if(this->knocked && !this->knock_in) break;
     }
     if(!this->knocked && this->libor->getlogLibor(0)->realization.size() == (n+1)){
-        cout<<"A complete path is simulated !"<<endl;
+        // cout<<"A complete path is simulated !"<<endl;
         this->exit_index = n;
         this->exit_state = this->libor->getLastState(0);
     }
@@ -118,9 +119,13 @@ void BarrierCapFloor::update(usigned mode, Tgen &gen){
 
 template<typename Tgen>
 void BarrierCapFloor::normalUpdate(Tgen &gen){
+    auto lastState = this->libor->getLastState(0);
     int z = (this->rWalk(gen))?1:-1;
     this->libor->updateOneStep(0, this->h, z);
-    this->zPath(this->h, z);
+
+    // double newZ = this->zPath_F(lastState) * z; 
+    double newZ = 0.0;
+    this->zPath(this->h, newZ);
 
 }
 
@@ -155,23 +160,41 @@ void BarrierCapFloor::sensitiveUpdate(usigned mode, Tgen &gen){
 
 template<typename Tgen>
 vector<pair<double, double> > BarrierCapFloor::monteCarloValue(usigned n, usigned mode, Tgen &gen){
-    vector<pair<double, double> > meanVars(n/100);      //store the result every 100 experiments
+    int stepN = 5000;
+    vector<pair<double, double> > meanVars(n/stepN);      //store the result every 100 experiments
     double M = 0.0;
     double S = 0.0;
-    auto result1 = oneExperiment(mode, gen); 
-    auto result2 = oneExperiment(mode, gen);
-    M = result1+result2;
-    S = (result1 - M/2)*(result1 - M/2) + (result2 - M/2)*(result2 - M/2);
-    for(usigned i=2; i < n; i++){
-        cout<<i<<"-th simulation !"<<endl;
-        auto result = oneExperiment(mode, gen); 
-        double newM = M + result;
-        S = S + (i*result - M)*(i*result - M)/(i * (i+1));
+
+    for (int i=0; i<n; i++){
+        auto result = oneExperiment(mode, gen);
+        double newM = M + (result - M)/(i+1);
+        S = S + M*M - newM*newM + (result*result - S - M*M)/(i+1);
         M = newM;
-        if((i+1) % 100 ==0){
-            meanVars[(i+1)/100 - 1] = make_pair(M/(i+1), S/(i+1));
+
+        if( (i+1) % stepN == 0){
+            cout<<i+1<<"-th simulation completed !"<<endl;
+            meanVars[(i+1)/stepN - 1] = make_pair(M, S);
         }
+
+
     }
+
+    // auto result1 = oneExperiment(mode, gen); 
+    // auto result2 = oneExperiment(mode, gen);
+    // M = result1+result2;
+    // S = (result1 - M/2)*(result1 - M/2) + (result2 - M/2)*(result2 - M/2);
+    // for(usigned i=2; i < n; i++){
+    //     if((i+1) % stepN ==0){
+    //         cout<<i+1<<"-th simulation !"<<endl;
+    //     }
+    //     auto result = oneExperiment(mode, gen); 
+    //     double newM = M + result;
+    //     S = S + (i*result - M)*(i*result - M)/(i * (i+1));
+    //     M = newM;
+    //     if((i+1) % stepN ==0){
+    //         meanVars[(i+1)/stepN - 1] = make_pair(M/(i+1), S/(i+1));
+    //     }
+    // }
     return meanVars;
 };
 

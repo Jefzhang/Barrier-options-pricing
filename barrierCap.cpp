@@ -4,12 +4,28 @@
 BarrierCapFloor::BarrierCapFloor(LiborRates* libor, bool call, double strike, double bound, bool cap, bool knock_in)
     :barrierOption(), libor(libor), call(call), strike(strike), bound(bound), cap(cap), knock_in(knock_in){
          //functions to define the dynamics of Z
+         //ToDo
         function<double(state<double>)> zScheme_b = [](state<double>){
             return 0.0;
         };
         function<double(state<double>)> zScheme_sig = [](state<double>){
-            return 0.0;
+            return 1.0;
         };
+
+        double h = 0.05;
+        int num = (int) this->libor->getlogLibor(0)->startTime / h;
+        double vi_square = 0.0;
+
+        for (int i = 0; i<num; i++){
+            double t = i*h;
+            double sig = this->libor->getlogLibor(0)->realization.getSchema().getSde().sig(Dstate(t, 0));
+            vi_square += sig * sig * h;
+        }
+        cout<<"Vi-square:"<<vi_square<<endl;
+
+
+        this->vi = sqrt(vi_square);
+
         this->zPath = normalPath<dEuler>();
         zPath.setSchema(dEuler(dSde(zScheme_b, zScheme_sig, 0)));
 
@@ -51,20 +67,20 @@ double BarrierCapFloor::intrinsicValue(){
     double v1, v2; 
     if(isInValue()){
         double endValue = this->exit_state.value;
-        cout<<"In value, final value : "<<endValue<<endl;
+        // cout<<"In value, final value : "<<endValue<<endl;
         v1 = (call)?max(0.0, endValue - this->strike):max(0.0, this->strike - endValue);
     }else{
-        cout<<"Out of value !"<<endl;
+        // cout<<"Out of value !"<<endl;
         v1 =  0.0;
     }
     auto exitIndex = this->exit_index;
     v2 = (this->zPath)[exitIndex].value;
-    cout<<"Intrinsic value : "<<v1+v2<<endl;
+    // cout<<"Intrinsic value : "<<v1+v2<<endl;
     return v1+v2;
 }
 
 bool BarrierCapFloor::isInValue(){
-    cout<<"if knocked : "<<this->knocked<<endl;
+    // cout<<"if knocked : "<<this->knocked<<endl;
     return (this->knocked && this->knock_in) || (!this->knocked && !this->knock_in);
 }
 
@@ -75,26 +91,24 @@ void BarrierCapFloor::reset(){
     // cout<<"Path has been reset !"<<endl;
 }
 
-double BarrierCapFloor::closedValue(function<double(double)>sigma){
-    auto deltaPlus = [](double x, double v){
+auto deltaPlus = [](double x, double v){
         return (log(x)/v + v/2.0);
     };
-    auto deltaMinus = [](double x, double v){
-        return (log(x)/v - v/2.0);
-    };
 
-    auto normalCDF = [](double x){
-        return erfc(-x/sqrt(2))/2;
-    };
+auto deltaMinus = [](double x, double v){
+    return (log(x)/v - v/2.0);
+};
 
-    int num= (int) this->libor->getlogLibor(0)->startTime / this->h;
-    double vi_square = 0.0;
-    for(int i = 0; i<num; i++){
-        double t = i*h;
-        auto sig = sigma(t);
-        vi_square += sig * sig * h;
-    }
-    double vi = sqrt(vi_square);
+auto normalCDF = [](double x){
+    return erfc(-x/sqrt(2))/2;
+};
+
+auto normalDeriv = [](double x){
+    return exp(-x*x/2.0)/sqrt(2*M_PI);
+};
+
+double BarrierCapFloor::closedValue(function<double(double)>sigma){
+    
     double L = this->libor->rateAtTime(0, 0);
     double H = this->bound;
     double K = this->strike;
@@ -105,5 +119,27 @@ double BarrierCapFloor::closedValue(function<double(double)>sigma){
     double term4 = K*L*(normalCDF(deltaMinus(H*H / (K*L), vi)) - normalCDF(deltaMinus(H/L, vi)))/H ; 
 
     return term1 + term2 + term3 + term4;
+};
+
+double BarrierCapFloor::zPath_F(Dstate curState){
+    // auto curState = this->libor->getLastState(0);
+    double L = curState.value;
+    double H = this->bound;
+    double K = this->strike;
+
+    auto sigma = this->libor->getlogLibor(0)->realization.getSchema().getSde().sig(curState);
+    double vs = sqrt((this->libor->getlogLibor(0)->startTime - curState.time)*sigma*sigma);
+
+    double term1 = normalCDF(deltaPlus(L/K, vs)) - normalCDF(deltaPlus(L/H, vs));
+    double term2 = (normalDeriv(deltaPlus(L/K, vs)) - normalDeriv(deltaPlus(L/H, vs)))/vs;
+    double term3 = -K * (normalDeriv(deltaMinus(L/K, vs)) - normalDeriv(deltaMinus(L/H, vs)))/L/vs;
+    double term4 = -H * (normalDeriv(deltaPlus(H/L, vs)) - normalDeriv(deltaPlus(H*H/(K*L), vs)))/L/vs;
+    double term5 = K * (normalCDF(deltaMinus(H*H / (K*L), vs)) - normalCDF(deltaMinus(H/L, vs)))/H ;
+    double term6 = K * (normalDeriv(deltaMinus(H/L, vs)) - normalDeriv(deltaMinus(H*H / (K*L), vs)))/vs/H;
+
+    // auto sigma = this->libor->getlogLibor(0)->realization.getSchema().getSde().sig(curState);
+    // cout << "term1 : "<<term1<<" term2 :"<<term2<<" term3:"<<term3<<endl;
+    // cout << "term4 : "<<term4<<" term5 :"<<term5<<" term6:"<<term6<<endl;
+    return -sigma * (term1 + term2 + term3 + term4 + term5 + term6);
 }
 

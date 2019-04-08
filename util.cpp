@@ -38,6 +38,7 @@ string subArray(const char * array, int start, int end){
     if(end<0){
         end += sizeof(array)/sizeof(*array);
     }
+    cout<<end<<endl;
     string temp(end-start+1, '0');
     for (int i = start; i <= end ; i++)
            temp[i-start] = array[i];
@@ -46,8 +47,14 @@ string subArray(const char * array, int start, int end){
 };
 
 pair<int, int> getBarrierCapFloorSimuPara(char const *argv[]){
-    string numSimu = subArray(argv[1], 2, -1); 
-    string modeC = subArray(argv[2], 5, 5); 
+    cout<<argv[1]<<endl;
+    cout<<argv[2]<<endl;
+    // cout<<sizeof(argv[1])/sizeof(*argv[1])<<endl;
+    // string numSimu = subArray(argv[1], 2, -1); 
+    // cout<<numSimu<<endl;
+    // string modeC = subArray(argv[2], 5, 5); 
+    string numSimu = string(argv[1]);
+    string modeC = string(argv[2]);  
     int N = stoi(numSimu);
     int mode = stoi(modeC);
     return make_pair(N, mode);

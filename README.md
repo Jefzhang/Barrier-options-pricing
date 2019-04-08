@@ -9,11 +9,13 @@
 
 ### To run the simulation for barrier cap/floor, with 10000 times and algo type 1:
 ```
-    make barrierCap N=10000 mode=1
+    make barrierCap
+    ./barrierCap N=10000 mode=1
 ```
 
 ### To run the simulation for barrier swaption, with 10000 times and algo type 1:
 ```
-    make barrierSwap N=10000 mode=1
+    make barrierSwap
+    ./barrierSwap N=10000 mode=1
 ```
 
