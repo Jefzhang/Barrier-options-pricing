@@ -56,7 +56,8 @@ class LiborRates{
 
         double getGlobalSigmaMax(double h)const;
 
-        double getLocalSigmaMax()const;
+        // vector<double> getLocalSigmaMax(double h)const;
+        pair<vector<double>, double> getLocalSigmaMax()const;
 
         double getGlobalSigmaMaxFor(unsigned i, double h)const;
 

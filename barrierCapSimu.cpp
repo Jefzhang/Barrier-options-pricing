@@ -38,7 +38,7 @@ int main(int argc, char const *argv[])
     double H = 0.28;
     bool call = true;
     bool cap = true;
-    double knock_in = false;
+    bool knock_in = false;
 
     vector<double> startTime(1, 9);  //one dimension
     vector<double> endTime(1, 10);
@@ -66,7 +66,7 @@ int main(int argc, char const *argv[])
     auto barrierCap = BarrierCapFloor(&liborRates, call, K, H, cap, knock_in);
 
     
-    string filename = "result/barrierCap_mode"+to_string(mode)+".txt";
+    string filename = "result/barrierCap_mode"+to_string(mode)+"_new.txt";
     createFile(filename);
     ofstream of;
     of.open(filename, ofstream::out | ofstream::app); 

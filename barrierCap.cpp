@@ -59,7 +59,7 @@ bool BarrierCapFloor::isInSensitiveArea(){
 }
 
 bool BarrierCapFloor::exitBounedArea(){
-    auto state = this->libor->getlogLibor(0)->realization.back();
+    auto state = this->libor->getLastState(0);
     return (this->cap)? (state.value > this->bound) : (state.value < this->bound);
 }
 

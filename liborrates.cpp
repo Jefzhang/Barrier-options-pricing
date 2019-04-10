@@ -54,7 +54,7 @@ void LiborRates::setDynamics(vector<function<double(double)> >& sigma, vector<ve
         function<double(Dstate)> bi;
         function<double(Dstate)> sigmai = [i, sigma](Dstate state){
             return sigma[i](state.time);
-        };;
+        };
         if(i<k){
             bi = [this, sigma, correlation, i, k](Dstate state) {
                 double sum = 0.0;
@@ -109,7 +109,7 @@ void LiborRates::resetAllPath(){
 
 void LiborRates::setLastState(usigned i, Dstate state){
     this->logLibors[i]->realization.setLastState(Dstate(state.time, log(state.value)));
-}  
+}
 
 Dstate LiborRates::getLastState(usigned i)const{
     auto lastState = this->logLibors[i]->realization.back();
@@ -133,7 +133,6 @@ double LiborRates::getGlobalSigmaMax(double h)const{
     return maxResult;
 }
 
-
 double LiborRates::getGlobalSigmaMaxFor(unsigned i, double h)const{
     double maxResult = numeric_limits<double>::min();
     int num = this->logLibors[i]->startTime / h;
@@ -143,14 +142,29 @@ double LiborRates::getGlobalSigmaMaxFor(unsigned i, double h)const{
     return maxResult;
 }
 
-double LiborRates::getLocalSigmaMax()const{
+pair<vector<double>, double> LiborRates::getLocalSigmaMax()const{
+    vector<double> sigma; 
     double maxResult = numeric_limits<double>::min();
     for(int i=0; i<this->N; i++){
         auto state = this->logLibors[i]->realization.back();
-        maxResult = max(maxResult, this->logLibors[i]->realization.getSchema().getSde().sig(state));
+        auto sig = this->logLibors[i]->realization.getSchema().getSde().sig(state);
+        sigma.push_back(sig);
+        maxResult = max(maxResult, sig);
     } 
+    return make_pair(sigma, maxResult);
 }
-
+// vector<double> LiborRates::getLocalSigmaMax(double h)const{ 
+//     vector<double> maxSigmas; 
+//     int num = int(this->logLibors[0]->startTime / h);
+//     for(int i=0; i<num; i++){
+//         double maxR = numeric_limits<double>::min();
+//         for(int j=0; j<this->N; j++){
+//             maxR = max(maxR, this->logLibors[j]->realization.getSchema().getSde().sig(Dstate(h*i, 0)));
+//         }
+//         maxSigmas.push_back(maxR);
+//     }
+//     return maxSigmas;
+// }
 
 
 logLibor* LiborRates::getlogLibor(usigned i)const{

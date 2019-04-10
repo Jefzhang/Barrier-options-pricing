@@ -30,7 +30,7 @@ int main(int argc, char const *argv[])
     double Rup = 0.075;
     bool call = true;
     bool cap = true;
-    double knock_in = false;
+    bool knock_in = false;
 
     double beta = 0.1;
 
@@ -57,25 +57,31 @@ int main(int argc, char const *argv[])
     liborRates.setDynamics(sigma, correlation, initValue, -1);
 
     auto barrierSwap = barrierSwaption(&liborRates, call, K, Rup, cap, knock_in);
+    
     string filename = "result/barrierSwap_mode"+to_string(mode)+".txt";
     createFile(filename);
     ofstream of;
     of.open(filename, ofstream::out | ofstream::app);
+    chrono::time_point<chrono::system_clock> start = chrono::system_clock::now();
     for(auto h:hRange){
         of<<"Step : "<<h<<endl;
         barrierSwap.setStep(h);
-
-        barrierSwap.monteCarloValue(N, mode, gen, of);
-        // for( auto term :result){
-        //     of<<term.first<<'\t'<<term.second<<'\n';
-        // };
+        auto result = barrierSwap.monteCarloValue(N, mode, gen, of);
+        for( auto term :result.first){
+            of<<term.first<<'\t'<<term.second<<'\n';
+        };
+        of<<"Average exit time :"<<result.second<<'\n';
         of<<'\n';
     }
+    chrono::time_point<chrono::system_clock> end = chrono::system_clock::now();
+    chrono::duration<double> runtime = end-start; 
+    cout<<"Simulation time : "<<runtime.count()<<endl;
+
     double approxValue = barrierSwap.approxValue();
     of<<"Approximate reference value is : "<<approxValue<<'\n';
     of.close();
 
-
+    // for saving libor paths to plot
     // double h = hRange[0];
     // barrierSwap.setStep(h);
     // string filename = "output/multiLiborPath.txt";
