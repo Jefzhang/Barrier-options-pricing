@@ -94,7 +94,7 @@ void BarrierCapFloor::makeOnePath(usigned mode, Tgen &gen){
         if(this->knocked && !this->knock_in) break;
     }
     if(!this->knocked && this->libor->getlogLibor(0)->realization.size() == (n+1)){
-        // cout<<"A complete path is simulated !"<<endl;
+        // A complete path is simulated !
         this->exit_index = n;
         this->exit_state = this->libor->getLastState(0);
     }
@@ -111,7 +111,7 @@ void BarrierCapFloor::update(usigned mode, Tgen &gen){
         }
     }else{
         if(!this->knocked && isInSensitiveArea()){
-            //cout<<"Entered the sensitive zone !"<<endl;
+            //Entered the boundary zone 
             sensitiveUpdate(mode, gen);  
         }
     }
@@ -138,16 +138,15 @@ void BarrierCapFloor::sensitiveUpdate(usigned mode, Tgen &gen){
         this->exit_state = this->libor->getLastState(0);
     }else{
         double p = this->computeAvanceProba();
-        // cout<<"Go to bound with proba "<<p<<endl;
         bernoulli_distribution r(p);
         if(r(gen)){
-            // cout<<"Change  to the bound at "<<this->libor->getLastState(0).time<<endl;
+            // Change it to the projection of current state on the bound
             this->knocked = true;
             this->exit_index = this->libor->getlogLibor(0)->realization.size() - 1;
             this->libor->setLastState(0, state<double>(this->exit_index * this->h, this->bound));
             this->exit_state = this->libor->getLastState(0);
         }else{
-            // cout<<"Retreat at "<<lastState.time<<endl;
+            // Back out of the boundary zone 
             auto lastState = this->libor->getLastState(0);
             double term = this->lamda_sqrth();
             double newValue = (this->cap)? exp(log(lastState.value) - term) : exp(log(lastState.value) + term);
@@ -178,23 +177,6 @@ vector<pair<double, double> > BarrierCapFloor::monteCarloValue(usigned n, usigne
 
 
     }
-
-    // auto result1 = oneExperiment(mode, gen); 
-    // auto result2 = oneExperiment(mode, gen);
-    // M = result1+result2;
-    // S = (result1 - M/2)*(result1 - M/2) + (result2 - M/2)*(result2 - M/2);
-    // for(usigned i=2; i < n; i++){
-    //     if((i+1) % stepN ==0){
-    //         cout<<i+1<<"-th simulation !"<<endl;
-    //     }
-    //     auto result = oneExperiment(mode, gen); 
-    //     double newM = M + result;
-    //     S = S + (i*result - M)*(i*result - M)/(i * (i+1));
-    //     M = newM;
-    //     if((i+1) % stepN ==0){
-    //         meanVars[(i+1)/stepN - 1] = make_pair(M/(i+1), S/(i+1));
-    //     }
-    // }
     return meanVars;
 };
 

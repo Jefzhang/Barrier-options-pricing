@@ -25,7 +25,8 @@ int main(int argc, char const *argv[])
     usigned mode = params.second; //algo type, 1 - weak order 1, 2 - weak order 1/2, 3 - simple monte carlo
     cout<<"We are going to make "<<N<<" simulations with algo type "<<mode<<endl;
 
-    vector<double> hRange {0.01};
+    // vector<double> hRange {0.01};
+    vector<double> hRange {0.02, 0.05, 0.1, 0.125, 0.2, 0.25, 0.5};
     double K = 0.01;
     double Rup = 0.075;
     bool call = true;

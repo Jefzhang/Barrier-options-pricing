@@ -1,10 +1,8 @@
 #pragma once
 #include "liborrates.hpp"
 #include <fstream>
-// #include "stdafx.h" 
-// #include "optimization.h"
 #include "optim/header_only_version/optim.hpp"
-// #include <armadillo>
+
 
 class barrierSwaption:public barrierOption<double, LiborRates>{
 
@@ -42,8 +40,6 @@ class barrierSwaption:public barrierOption<double, LiborRates>{
 
         pair<vector<double>, double> projectionCalculate();
 
-        // double objectiveFunc(const arma::vec& vals_inp, arma::vec* grad_out, void* opt_data);
-
         double computeAvanceProba();
 
         template<typename Tgen>
@@ -76,7 +72,6 @@ class barrierSwaption:public barrierOption<double, LiborRates>{
         bool call;
         double strike;
         double bound;
-        // double sBound;
         bool cap;
         bool knock_in;
         bool knocked;
@@ -88,7 +83,6 @@ class barrierSwaption:public barrierOption<double, LiborRates>{
         vector<double> locsigMax;
         double maxLogIncre;
         double P_T0;
-        // double averageExitTime; 
 
 };
 
@@ -106,9 +100,7 @@ void barrierSwaption::update(usigned mode, Tgen &gen){
         }
     }else{
         if(!this->knocked && isInSensitiveArea()){
-            sensitiveUpdate(mode, gen);
-            // chrono::time_point<chrono::system_clock> end = chrono::system_clock::now();
-            
+            sensitiveUpdate(mode, gen);            
         }
     }
 }
@@ -136,26 +128,20 @@ void barrierSwaption::sensitiveUpdate(unsigned mode, Tgen &gen){
         auto projection = this->projectionCalculate();
         double p = this->lamda_sqrth() / (projection.second + this->lamda_sqrth());
         bernoulli_distribution r(p);
-        if(r(gen)){ //to the projection 
-            // cout<<"To the projection :"<<endl;
-            //cout<<"Proba "<<p<<endl;
+        if(r(gen)){
             this->knocked = true;
             this->exit_index = this->libor->getlogLibor(0)->realization.size() - 1;
             for(uint i=0; i<this->exit_state.size(); i++){
                 this->exit_state[i] = state<double>(this->exit_index * this->h, exp(projection.first[i]));
                 this->libor->setLastState(i, this->exit_state[i]);
-                // cout<<"Libor "<<i<<"\t : "<<log(this->exit_state[i].value)<<endl;
             }
-        }else{  //retreat
-            // cout<<"Retreat to :"<<endl;
+        }else{
             auto lastValue  = this->libor->getLastValue();
             double t = this->libor->getLastState(0).time;
             for(auto it = lastValue.begin(); it!=lastValue.end(); it++){
                 (*it) = log(*it);
-               // cout<<(*it)<<endl;
             }
             double lamda = this->lamda_sqrth();
-            // vector<state<double> >newStates;
             for(uint i=0; i<lastValue.size(); i++){
                 double newValue = lastValue[i] + lamda * (lastValue[i] - projection.first[i]) / projection.second;
                 this->libor->setLastState(i, state<double>(t, exp(newValue)));
@@ -173,7 +159,6 @@ void barrierSwaption::makeOnePath(usigned mode, Tgen &gen){
         if(this->knocked && !this->knock_in) break;
     }
     if(!this->knocked && this->libor->getlogLibor(0)->realization.size() == (n+1)){
-        //cout<<"A complete path is simulated !"<<endl;
         this->exit_index = n;
         for(int i=0; i<this->libor->getNumLibors(); i++){
             this->exit_state[i] = this->libor->getLastState(i);
@@ -191,29 +176,28 @@ double barrierSwaption::oneExperiment(usigned mode, Tgen &gen){
 template<typename Tgen>
 pair<vector<pair<double,double> >, double> barrierSwaption::monteCarloValue(usigned n, usigned mode, Tgen &gen, ofstream& of){
     
-    int stepN = 100;
+    int stepN = 1000;
     vector<pair<double, double> > meanVars(n/stepN);      //store the result every 100 experiments
     double M = 0.0;
     double S = 0.0;
     double mean_exit = 0.0;
 
-    for (int i=0; i<n; i++){
+    for (int i=0; i<n;){
         auto result = oneExperiment(mode, gen);
-        mean_exit += (this->exit_index * this->h - mean_exit)/(i+1);
-        double newM = M + (result - M)/(i+1);
-        S = S + M*M - newM*newM + (result*result - S - M*M)/(i+1);
-        M = newM;
+        if (!isnan(result)){
+            mean_exit += (this->exit_index * this->h - mean_exit)/(i+1);
+            double newM = M + (result - M)/(i+1);
+            S = S + M*M - newM*newM + (result*result - S - M*M)/(i+1);
+            M = newM;
 
-        if( (i+1) % stepN == 0){
-            cout<<i+1<<"-th simulation completed !"<<endl;
-            // of<<M<<'\t'<<S<<endl;
-            meanVars[(i+1)/stepN - 1] = make_pair(M, S);
-        }
+            if( (i+1) % stepN == 0){
+                cout<<i+1<<"-th simulation completed !"<<endl;
+                meanVars[(i+1)/stepN - 1] = make_pair(M, S);
+            }
+            i++;
+        }else{
+            cout<<"NaN result"<<endl;
+        }    
     }
-    // for( auto term :meanVars){
-    //         of<<term.first<<'\t'<<term.second<<'\n';
-    // };
     return make_pair(meanVars, mean_exit);
-    // of<<"Average exit time :"<<mean_exit<<'\n';
-    // of<<'\n';
 };

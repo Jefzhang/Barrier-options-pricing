@@ -22,7 +22,6 @@ struct logLibor{
     normalPath<euler> & getRealization(){
         return this->realization;
     }
-    // boundedPath<euler> realization;
     normalPath<euler> realization;
     double startTime;
     double endTime;
@@ -78,7 +77,6 @@ class LiborRates{
 
     private:
         vector<logLibor* > logLibors; //contains pointers to loglibors
-        // vector<double> tDates; //tenor dates
         vector<vector<double> >correlations;
         vector<vector<double> > L;  //cholesky decomposition of correlation matrix
         usigned N;
@@ -87,18 +85,12 @@ class LiborRates{
         // double maxDate;   //the last tenor dates
 };
 
-// template<typename Tgen>
-// void LiborRates::makeOnePath(usigned i, usigned mode, Tgen & gen){
-//     this->logLibors[i]->realization.generateOnePath(mode, gen);
-// }
 
 
 template<typename Tvalue, typename Tpath>
 class barrierOption{
     public:
         barrierOption(){};
-        // virtual pair<double, double> monteCarloValue(usigned n)=0;
-        // virtual double closedValue()=0;
 
     private:
         virtual double intrinsicValue()=0;
@@ -112,7 +104,7 @@ class barrierOption{
 
 
 
-//ToDo
+
 class TriggerSwap:public barrierOption<double, LiborRates>
 {
     public:

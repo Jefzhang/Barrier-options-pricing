@@ -3,8 +3,6 @@
 
 BarrierCapFloor::BarrierCapFloor(LiborRates* libor, bool call, double strike, double bound, bool cap, bool knock_in)
     :barrierOption(), libor(libor), call(call), strike(strike), bound(bound), cap(cap), knock_in(knock_in){
-         //functions to define the dynamics of Z
-         //ToDo
         function<double(state<double>)> zScheme_b = [](state<double>){
             return 0.0;
         };
@@ -67,20 +65,16 @@ double BarrierCapFloor::intrinsicValue(){
     double v1, v2; 
     if(isInValue()){
         double endValue = this->exit_state.value;
-        // cout<<"In value, final value : "<<endValue<<endl;
         v1 = (call)?max(0.0, endValue - this->strike):max(0.0, this->strike - endValue);
     }else{
-        // cout<<"Out of value !"<<endl;
         v1 =  0.0;
     }
     auto exitIndex = this->exit_index;
     v2 = (this->zPath)[exitIndex].value;
-    // cout<<"Intrinsic value : "<<v1+v2<<endl;
     return v1+v2;
 }
 
 bool BarrierCapFloor::isInValue(){
-    // cout<<"if knocked : "<<this->knocked<<endl;
     return (this->knocked && this->knock_in) || (!this->knocked && !this->knock_in);
 }
 
@@ -88,7 +82,6 @@ void BarrierCapFloor::reset(){
     this->knocked = false;
     this->libor->resetAllPath(); 
     this->zPath.reset();
-    // cout<<"Path has been reset !"<<endl;
 }
 
 auto deltaPlus = [](double x, double v){
@@ -122,7 +115,6 @@ double BarrierCapFloor::closedValue(function<double(double)>sigma){
 };
 
 double BarrierCapFloor::zPath_F(Dstate curState){
-    // auto curState = this->libor->getLastState(0);
     double L = curState.value;
     double H = this->bound;
     double K = this->strike;
@@ -137,9 +129,6 @@ double BarrierCapFloor::zPath_F(Dstate curState){
     double term5 = K * (normalCDF(deltaMinus(H*H / (K*L), vs)) - normalCDF(deltaMinus(H/L, vs)))/H ;
     double term6 = K * (normalDeriv(deltaMinus(H/L, vs)) - normalDeriv(deltaMinus(H*H / (K*L), vs)))/vs/H;
 
-    // auto sigma = this->libor->getlogLibor(0)->realization.getSchema().getSde().sig(curState);
-    // cout << "term1 : "<<term1<<" term2 :"<<term2<<" term3:"<<term3<<endl;
-    // cout << "term4 : "<<term4<<" term5 :"<<term5<<" term6:"<<term6<<endl;
     return -sigma * (term1 + term2 + term3 + term4 + term5 + term6);
 }
 

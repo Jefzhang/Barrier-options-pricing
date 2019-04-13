@@ -1,4 +1,3 @@
-//#include "process.hpp"
 #include "liborrates.hpp"
 #include "util.hpp"
 #include<functional>
@@ -153,18 +152,6 @@ pair<vector<double>, double> LiborRates::getLocalSigmaMax()const{
     } 
     return make_pair(sigma, maxResult);
 }
-// vector<double> LiborRates::getLocalSigmaMax(double h)const{ 
-//     vector<double> maxSigmas; 
-//     int num = int(this->logLibors[0]->startTime / h);
-//     for(int i=0; i<num; i++){
-//         double maxR = numeric_limits<double>::min();
-//         for(int j=0; j<this->N; j++){
-//             maxR = max(maxR, this->logLibors[j]->realization.getSchema().getSde().sig(Dstate(h*i, 0)));
-//         }
-//         maxSigmas.push_back(maxR);
-//     }
-//     return maxSigmas;
-// }
 
 
 logLibor* LiborRates::getlogLibor(usigned i)const{
@@ -172,11 +159,4 @@ logLibor* LiborRates::getlogLibor(usigned i)const{
 }
 
 
- 
-// BarrierCapFloor::BarrierCapFloor(LiborRates* libor, normalPath<euler> * zPath, bool call, double strike, double bound, bool cap, bool knock_in)
-    // :barrierOption(),libor(libor), zPath(zPath), call(call), strike(strike), bound(bound), cap(cap), knock_in(knock_in){};
-
-// double BarrierCapFloor::averageExitTime(){
-//     return 0.0;
-// }
 
